@@ -82,3 +82,15 @@ function subscribeToJobs(onChange, onError) {
     onChange(jobs);
   }, onError);
 }
+
+// Backs up the finished PDF itself to Cloud Storage on Approve — separate
+// from syncSaveJob, which only ever carries the job's structured data.
+// Storage has no offline queueing the way enablePersistence gives Firestore,
+// so this can genuinely fail while offline; callers should keep the job
+// around (not delete it) until this resolves, so nothing gets lost.
+function uploadJobPdf(jobId, blob) {
+  var ref = firebase.storage().ref().child("job-pdfs/" + jobId + ".pdf");
+  return ref.put(blob, { contentType: "application/pdf" }).then(function () {
+    return ref.getDownloadURL();
+  });
+}

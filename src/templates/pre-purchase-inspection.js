@@ -1118,11 +1118,11 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
         pdf.addImage(imgData, "JPEG", 0, 0, pageWidth, imgHeight);
       }
       pdf.save(buildFilename());
-      return true;
+      return pdf.output("blob");
     } catch (err) {
       console.error(err);
       setExportError("Export failed: " + (err && err.message ? err.message : err));
-      return false;
+      return null;
     } finally {
       setExportMode(false);
       setExporting(false);
@@ -1130,13 +1130,25 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
   }
 
   // Approve = the office reviewing a tech's "completed" card. Exports the
-  // PDF (today's stand-in for actually sending it anywhere — real network
-  // backup lands once cloud sync exists) and clears it from this device's
-  // saved-jobs list.
+  // PDF, backs it up to Cloud Storage, and only then clears it from the
+  // local and cloud saved-jobs list — if the cloud backup fails, the job
+  // stays put so Approve can be retried instead of silently losing it.
   async function approveJob() {
-    const ok = await exportPDF();
-    if (!ok) return;
+    const blob = await exportPDF();
+    if (!blob) return;
     if (jobId) {
+      setExporting(true);
+      try {
+        await uploadJobPdf(jobId, blob);
+      } catch (err) {
+        console.error(err);
+        setExportError(
+          "PDF exported, but the cloud backup failed: " + (err && err.message ? err.message : err) + ". Try Approve again once you're back online."
+        );
+        setExporting(false);
+        return;
+      }
+      setExporting(false);
       deleteJob(jobId);
       syncDeleteJob(jobId).catch((err) => console.error("Cloud sync failed", err));
     }
