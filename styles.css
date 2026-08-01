@@ -1,0 +1,1872 @@
+:root {
+  --ink: #14161a;
+  --line: #b9bec7;
+  --line-strong: #7a808c;
+  --panel: #f4f5f7;
+  --accent: #1a56db;
+  --accent-ink: #ffffff;
+  --danger: #b3261e;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #d9dce1;
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea {
+  font-family: inherit;
+}
+
+/* ---------- App shell ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ---------- Sign-in gate ---------- */
+
+.auth-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--line-strong);
+  font-size: 14px;
+}
+
+.auth-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #d9dce1;
+  padding: 20px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 340px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 36px 28px;
+  text-align: center;
+}
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--line-strong);
+  margin: 0 0 24px;
+}
+
+.auth-error {
+  font-size: 13px;
+  color: var(--danger);
+  margin: 0 0 16px;
+}
+
+.auth-signin-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+}
+
+/* ---------- Template picker ---------- */
+
+.picker-account-bar {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.picker-account-email {
+  font-size: 13px;
+  color: var(--line-strong);
+}
+
+.picker-signout-btn {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.picker-signout-btn:hover {
+  background: var(--panel);
+}
+
+.template-picker {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  background: #d9dce1;
+}
+
+.template-picker-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.template-picker-subtitle {
+  font-size: 15px;
+  color: var(--line-strong);
+  margin: 0 0 32px;
+}
+
+.picker-sync-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin: -20px 0 20px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
+  gap: 20px;
+  max-width: 900px;
+  width: 100%;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 28px 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.template-card:hover {
+  border-color: var(--accent);
+}
+
+.template-icon {
+  font-size: 40px;
+}
+
+.template-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.template-desc {
+  font-size: 12px;
+  color: var(--line-strong);
+}
+
+.template-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--line-strong);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ---------- Saved job cards (in progress / completed) ---------- */
+
+.saved-jobs {
+  width: 100%;
+  max-width: 700px;
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.saved-jobs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saved-jobs-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--line-strong);
+}
+
+.saved-jobs-title .hint {
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.saved-job-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.saved-job-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.saved-job-main:hover {
+  background: var(--panel);
+}
+
+.saved-job-status {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.saved-job-status-progress {
+  background: #c2760c;
+}
+
+.saved-job-status-complete {
+  background: #1a7f37;
+}
+
+.saved-job-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.saved-job-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-job-meta {
+  font-size: 12px;
+  color: var(--line-strong);
+}
+
+.saved-job-discard {
+  flex-shrink: 0;
+  width: 44px;
+  border: none;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--line-strong);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.saved-job-discard:hover {
+  background: var(--panel);
+  color: var(--danger);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--ink);
+  color: #fff;
+  flex-wrap: wrap;
+}
+
+.app-title {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.export-error {
+  color: #ffb4ac;
+  font-size: 13px;
+  max-width: 240px;
+}
+
+.role-badge {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #2f3540;
+  color: #cfd3da;
+}
+
+.role-badge-office {
+  background: var(--danger);
+  color: #fff;
+}
+
+.card-code {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #cfd3da;
+}
+
+/* Text written by the office (live cloud-sync edits) is flagged red/bold
+   wherever it appears, so techs can tell it apart from their own entries. */
+.office-written {
+  color: var(--danger) !important;
+  font-weight: 700;
+}
+
+input.office-written[type="checkbox"] {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.btn {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  min-height: 46px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- Page 2 lock ---------- */
+
+.lock-banner {
+  background: #fdecea;
+  border: 2px solid var(--danger);
+  color: #7a1712;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin: 4px 0 14px;
+}
+
+.page input:disabled,
+.page textarea:disabled {
+  background: #eef0f3;
+  color: #9aa0aa;
+  cursor: not-allowed;
+  border-color: #d8dbe0;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #fff;
+  border-color: #6b7280;
+}
+
+/* ---------- Pages ---------- */
+
+.pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 24px 12px 60px;
+}
+
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 100%;
+  /* The Wheel Measurements row (tread table + brake pad/tyre pressure card)
+     is fixed-width content ~408px wide inside a proportional column — below
+     roughly 772px of page width that column can no longer fit it, so the
+     page overflows its own border on narrower tablets. Floor it above that
+     point instead of letting max-width shrink it into the broken range;
+     narrower screens scroll/pinch-zoom to view the page, same as any
+     fixed-size document. */
+  min-width: 800px;
+  background: #ffffff;
+  padding: 10mm 10mm 8mm;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  /* Layout below reacts to the page's own rendered width, not the browser
+     window — a printed page must look the same at any window size. */
+  container-type: inline-size;
+  container-name: page;
+}
+
+.page-label {
+  position: absolute;
+  top: 4mm;
+  right: 6mm;
+  font-size: 10px;
+  color: var(--line-strong);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 2px;
+  margin: 9px 0 4px;
+}
+
+.section-title .hint {
+  text-transform: none;
+  font-weight: 500;
+  color: var(--line-strong);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+/* ---------- Compact header ---------- */
+
+.header-groups {
+  display: flex;
+  gap: 0;
+  margin-top: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.header-group {
+  min-width: 0;
+  padding: 5px 10px;
+  background: #fff;
+}
+
+.header-group:nth-child(1) {
+  flex: 0.8;
+}
+
+.header-group:nth-child(2) {
+  flex: 1.2;
+}
+
+.header-group + .header-group {
+  border-left: 1px solid var(--line);
+}
+
+.header-group-title {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--line-strong);
+  margin-bottom: 3px;
+}
+
+.header-group-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 8px;
+  min-width: 0;
+}
+
+.hfield {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 6px;
+  background: var(--panel);
+  min-height: 25px;
+}
+
+.hfield-wide {
+  grid-column: 1 / -1;
+}
+
+.hfield-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--line-strong);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hfield-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  padding: 3px 2px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.hfield-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* ---------- Export mode (plain-text stand-ins for PDF capture) ---------- */
+/* html2canvas can't reliably paint live <input>/<textarea> values, so during
+   export these are swapped for plain divs carrying the same class (and thus
+   the same box styling) plus this modifier. */
+
+.export-text {
+  display: flex;
+  align-items: center;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  cursor: default;
+}
+
+.export-text-block {
+  display: block;
+}
+
+/* ---------- Rich text (bold/underline/colour highlighting) ---------- */
+
+/* display:contents makes this wrapper invisible to layout — its children
+   (the editable div, and the fixed-position toolbar) act as if they were
+   direct children of whatever flex/grid row this field normally sits in. */
+.rich-text-wrap {
+  display: contents;
+}
+
+.rich-text {
+  cursor: text;
+  min-width: 0;
+}
+
+.rich-text:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+.rich-text-inline {
+  white-space: nowrap;
+  overflow: hidden;
+  /* A contentEditable div lays out real line boxes for its text, unlike an
+     <input> (a replaced element with its own tighter intrinsic single-line
+     height) — pin this explicitly so swapping input->div for these fields
+     doesn't quietly grow every row's height and push pages over budget. */
+  line-height: 1;
+}
+
+.rich-text-multiline {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.rich-text:empty::before {
+  content: attr(data-placeholder);
+  color: #b3b7bf;
+  pointer-events: none;
+}
+
+.rich-toolbar {
+  position: fixed;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: var(--ink);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.rt-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rt-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.rt-clear {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cfd3d9;
+}
+
+.rt-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  touch-action: manipulation;
+  padding: 0;
+}
+
+.rt-swatch-red {
+  background: #c0271d;
+}
+
+.rt-swatch-orange {
+  background: #c2760c;
+}
+
+.rt-swatch-green {
+  background: #1a7f37;
+}
+
+/* ---------- Oil spec callout (parts to grab) ---------- */
+
+.oil-spec-bar {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+  padding: 3px 12px;
+  background: #fff6da;
+  border: 2px solid #b8860b;
+  border-radius: 8px;
+}
+
+.oil-spec-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oil-spec-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #7a5b00;
+  white-space: nowrap;
+}
+
+.oil-spec-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-bottom: 2px solid #b8860b;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 4px;
+  color: var(--ink);
+}
+
+.oil-spec-input:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- Fluids table ---------- */
+
+.fluids-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+
+.fluid-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  min-height: 31px;
+}
+
+.fluid-check {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.fluid-label {
+  font-size: 14px;
+  font-weight: 600;
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.fluid-value {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  padding: 4px 2px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+/* No permanent underline of its own — .fluid-row's bottom border already
+   runs the full row width, so it doubles as this field's line too instead
+   of drawing two close parallel lines. Focus still gets a visible cue. */
+.fluid-value:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+.fluid-value::placeholder {
+  color: #b3b7bf;
+}
+
+/* ---------- Pre-service checks ---------- */
+
+.prelights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+  margin-top: 4px;
+}
+
+.prelights-heading {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--line-strong);
+  margin-bottom: 2px;
+}
+
+.light-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  min-height: 32px;
+}
+
+.light-row .status-btn,
+.engine-logbook-panel .status-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.light-label {
+  font-size: 14px;
+  font-weight: 600;
+  width: 82px;
+  flex-shrink: 0;
+}
+
+/* No permanent underline of its own — .light-row's bottom border already
+   runs the full row width, so it doubles as this field's line too instead
+   of drawing two close parallel lines. */
+.light-note {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  padding: 4px 2px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.light-note:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+.light-note::placeholder {
+  color: #b3b7bf;
+}
+
+.status-toggle {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.status-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--line-strong);
+  cursor: pointer;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-btn.status-pass.active {
+  background: #1a7f37;
+  border-color: #1a7f37;
+  color: #fff;
+}
+
+.status-btn.status-fail.active {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.status-btn.status-electronic.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.status-btn.status-good.active {
+  background: #1a7f37;
+  border-color: #1a7f37;
+  color: #fff;
+}
+
+.status-btn.status-attention.active {
+  background: #c2760c;
+  border-color: #c2760c;
+  color: #fff;
+}
+
+.status-btn.status-due.active {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.status-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.condition-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: 10px;
+  color: var(--line-strong);
+  margin: 2px 0 6px;
+}
+
+.condition-legend .status-btn {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  border-radius: 4px;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Hug its own content instead of stretching full-width (the .page flex
+   column's default align-items:stretch is what was pulling it edge to edge
+   with mostly empty panel behind it). */
+.engine-logbook-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  gap: 6px 32px;
+  margin-top: 6px;
+  padding: 5px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.simple-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simple-check-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- Notes boxes ---------- */
+
+.notes-box {
+  width: 100%;
+  min-height: 70px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 14px;
+  resize: vertical;
+  color: var(--ink);
+  background: #fff;
+}
+
+.notes-box:focus {
+  outline: 2px solid var(--accent);
+}
+
+/* Fixed height (80% of the old fill-to-bottom size) — the reclaimed
+   space goes back to Fluids & Filters / Pre-Service Checks below. */
+.notes-lined-wrap {
+  position: relative;
+  height: 246px;
+  flex: 0 0 auto;
+}
+
+.notes-lines {
+  position: absolute;
+  inset: 0;
+  padding: 8px 8px 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 6px;
+  background-color: var(--panel);
+}
+
+.notes-line {
+  height: 24px;
+  border-bottom: 1px solid rgba(122, 128, 140, 0.45);
+  box-sizing: border-box;
+}
+
+.ruled-fill {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  line-height: 24px;
+  resize: none;
+  /* The pre-filled blank lines (so any ruled line is clickable) usually
+     over-provision past the box's actual visible height — that's fine, the
+     extra lines just aren't reachable, but a bare textarea would otherwise
+     show a scrollbar for that unused overflow. */
+  overflow: hidden;
+}
+
+/* Flexible-height counterpart to .notes-lined-wrap: fills whatever space
+   its flex-column parent has left, instead of a fixed height. */
+.ruled-fill-wrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 60px;
+}
+
+/* Due Next Service laid out as two "book pages" side by side instead of one
+   taller box — doubles the writing room within the same height (no
+   scrolling) by using width instead of height. The border/radius lives on
+   the outer wrap (not each page's own textarea) so it reads as one box with
+   a single spine down the middle, not two boxes with redundant edges. */
+.book-wrap {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 60px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.book-page {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.book-page .notes-lines {
+  border-radius: 0;
+}
+
+.book-page + .book-page {
+  border-left: 1px solid var(--line);
+}
+
+.book-notes {
+  border: none;
+  border-radius: 0;
+}
+
+/* ---------- Page 2: above/under car ---------- */
+
+/* min-width:0 overrides the flex/grid-item default of min-width:auto, which
+   otherwise lets a child's intrinsic content width (e.g. the fixed-width
+   tyre size inputs) force this column wider than its actual grid track,
+   overflowing the page instead of wrapping/shrinking to fit. */
+.col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.freetext-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+  min-height: 32px;
+}
+
+.freetext-label {
+  font-size: 14px;
+  font-weight: 600;
+  width: 150px;
+  flex-shrink: 0;
+}
+
+.freetext-full {
+  width: 100%;
+}
+
+/* Above Car sits in the narrower column now, so pull the label in tighter
+   and shrink the gap before the toggle buttons. */
+.condition-row {
+  gap: 4px;
+}
+
+.condition-row .freetext-label {
+  width: 92px;
+}
+
+/* No permanent underline of its own — .freetext-row's (.condition-row's)
+   bottom border already runs the full row width, so it doubles as this
+   field's line too instead of drawing two close parallel lines. */
+.condition-note {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  padding: 3px 2px;
+  color: var(--ink);
+}
+
+.condition-note:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+/* No permanent underline of its own — .freetext-row's bottom border already
+   runs the full row width, so it doubles as this field's line too instead
+   of drawing two close parallel lines. */
+.freetext-value {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  padding: 5px 2px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.freetext-value:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+/* ---------- Wheel grid ---------- */
+
+.wheel-grid-wrap {
+  margin-top: 4px;
+}
+
+.wheel-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Fills its column instead of a fixed pixel width — the old fixed-width
+   table sitting beside a fixed-width card left ~zero margin for error and
+   could overflow the page on browsers with slightly different font metrics.
+   table-layout:fixed + real per-column <col> widths (not colSpan cells
+   sized via CSS, which doesn't reliably divide space) still keeps the
+   column split deterministic; it just scales with whatever room the page
+   actually has instead of assuming an exact pixel count. */
+.wheel-grid-compact {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.wheel-col-label {
+  width: 34px;
+}
+
+.wheel-grid th,
+.wheel-grid td {
+  border: 1px solid var(--line);
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.wheel-grid thead th {
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wheel-metric-label {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--panel);
+  white-space: nowrap;
+}
+
+.wheel-input {
+  width: 36px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 13px;
+  padding: 6px 1px;
+  color: var(--ink);
+}
+
+/* Compact wheel grid: Front/Rear rows, Left/Right paired tread columns,
+   sized to fit alongside Above Car in a half-width column. */
+.wheel-grid-compact th,
+.wheel-grid-compact td {
+  padding: 4px 2px;
+}
+
+.wheel-grid-compact .wheel-input-tread {
+  width: 100%;
+  padding: 5px 0;
+  font-size: 13px;
+}
+
+.wheel-input:focus {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.wheel-hint {
+  font-size: 11px;
+  color: var(--line-strong);
+  margin: 4px 2px 0;
+}
+
+.wheel-extra-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--line-strong);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.wheel-extra-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Brake Pad / Brake Disc / Tyre Pressure / Tyre Size stacked in one
+   full-width card below the tread table. Tightened padding/gaps (vs the
+   first version) since Brake Disc's wider input (needs to fit "99.9") no
+   longer leaves room for the looser spacing this card started with. */
+.wheel-measure-card {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wheel-pad-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.wheel-pad-field,
+.wheel-extra-field,
+.tyre-size-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.wheel-pad-field .wheel-input,
+.wheel-extra-field .wheel-input {
+  width: 38px;
+  padding: 5px 1px;
+  font-size: 14px;
+}
+
+/* Brake disc needs to fit up to "99.9" (min ~9mm, max ~99.9mm) — wider
+   than the other wheel-measure-card inputs. */
+.wheel-input-disc {
+  width: 50px !important;
+}
+
+.tyre-size-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.tyre-size-input {
+  width: 112px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  padding: 6px 4px;
+  color: var(--ink);
+}
+
+.tyre-size-input:focus {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.tyre-size-input::placeholder {
+  color: #b3b7bf;
+  font-weight: 400;
+}
+
+/* ---------- Photos ---------- */
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.photo-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.photo-img {
+  display: block;
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(20, 22, 26, 0.75);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+/* Sized to match .photo-card exactly (same border-radius, same height as
+   .photo-img) so a captured photo drops into precisely the same footprint
+   the "add" tile was occupying, rather than reflowing the grid. */
+.photo-add-tile {
+  height: 260px;
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--line-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.photo-add-icon {
+  font-size: 32px;
+}
+
+/* ---------- Pre-Purchase Inspection: car damage diagram ---------- */
+
+.car-diagram-outer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.car-diagram-wrap {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.car-diagram-wrap.wrap-birdseye {
+  width: 100%;
+  max-width: 200px;
+  aspect-ratio: 340 / 640;
+}
+
+.car-diagram-wrap.wrap-frontrear {
+  width: 100%;
+  aspect-ratio: 460 / 320;
+}
+
+.car-diagram-wrap.wrap-side {
+  width: 100%;
+  aspect-ratio: 620 / 300;
+}
+
+.car-diagram-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.car-diagram-clear {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---------- Pre-Purchase Inspection: vehicle checks panel ---------- */
+
+.ppi-checks-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 4px;
+  padding: 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.ppi-checks-panel .status-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+/* Keys / PPSR Check / Engine Light share one compact line — PPSR's note
+   field is the only one that needs real width, so it's the flexible item
+   while Keys and Engine Light just hug their own content. */
+.ppi-checks-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  min-height: 0;
+}
+
+.ppi-checks-row .simple-check-row,
+.ppi-checks-row .light-row {
+  padding: 0;
+  border-bottom: none;
+  min-height: 0;
+}
+
+.ppi-checks-row .simple-check-row {
+  flex-shrink: 0;
+}
+
+.ppi-checks-row .light-row {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.ppi-checks-panel .simple-check-label,
+.ppi-checks-panel .light-label {
+  width: 92px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.ppi-checks-panel .light-note {
+  font-size: 13px;
+}
+
+.ppi-checks-panel .light-note::placeholder {
+  font-style: italic;
+  color: #b3b7bf;
+}
+
+/* Logbook gets its own line — its toggle uses single-letter labels (the
+   full words overflowed the compact status-btn box), spelled out here
+   instead so the abbreviations stay readable. */
+.ppi-logbook-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  min-height: 0;
+}
+
+.light-label-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--line-strong);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.status-btn.status-full.active {
+  background: #1a7f37;
+  border-color: #1a7f37;
+  color: #fff;
+}
+
+.status-btn.status-partial.active {
+  background: #c2760c;
+  border-color: #c2760c;
+  color: #fff;
+}
+
+.status-btn.status-none.active {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.status-btn.status-clear.active {
+  background: #1a7f37;
+  border-color: #1a7f37;
+  color: #fff;
+}
+
+.status-btn.status-flagged.active {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.status-btn.status-1.active,
+.status-btn.status-2.active,
+.status-btn.status-3.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- Pre-Purchase Inspection: per-view diagrams ---------- */
+
+.diagram-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.diagram-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diagram-view-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.diagram-photo-btn {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+/* Bird's-eye view: diagram on the left, notes on the right, instead of a
+   narrow diagram sitting above a wide empty gap — the notes column reclaims
+   that dead space. min-width:0 on both grid items guards against the
+   grid-item default min-width:auto overflow bug (see memory). */
+.diagram-split-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.diagram-col {
+  min-width: 0;
+}
+
+.notes-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.diagram-view-stacked .diagram-view-header {
+  margin-bottom: 4px;
+}
+
+/* Fixed-height ruled box (~5 lines) instead of a single-line input — reuses
+   the app's generic .notes-lines/.ruled-fill ruled-paper pattern. */
+.diagram-notes-wrap {
+  position: relative;
+  height: 132px;
+  flex: 0 0 auto;
+  margin-top: 6px;
+}
+
+.diagram-view-split .notes-col .diagram-notes-wrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 132px;
+}
+
+/* Additional Notes on the merged Under Car / Notes / Evaluation page — a
+   fixed compact box (not flex-fill-to-bottom) so Evaluation always has room
+   below it on the same page. */
+.ppi-page-notes {
+  margin-top: 4px;
+}
+
+/* Sized so a photo is actually readable on the printed card — a full-width
+   row (bird's-eye) fits ~3 across, a half-width paired row (front/rear,
+   left/right) fits 1-2, roughly matching "6 photos on a full empty page". */
+/* Sized to match the General Service Photos page (2 columns, 260px tall) so
+   a full continuation page holds 6 photos. Fixed track count (not
+   auto-fill) — auto-fill with a definite (non-1fr) max computes its track
+   count from the MAX, not the min, which silently collapsed this to a
+   single column at this card width. Fixed counts + minmax(0, Npx) tracks
+   avoid that ambiguity entirely: a track is exactly Npx regardless of how
+   many cards actually populate it, so sizing never depends on item count. */
+.diagram-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 355px));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Bird's-eye's inline photo slot (inside the narrower notes column) only
+   ever holds one photo — single track, same card size as everywhere else. */
+.notes-col .diagram-photo-grid {
+  grid-template-columns: minmax(0, 355px);
+}
+
+.diagram-photo-card {
+  position: relative;
+  height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.diagram-photo-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.diagram-photo-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(20, 22, 26, 0.75);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  padding: 0;
+}
+
+/* Shown once a view has more photos than fit on its own page — points at
+   the dedicated continuation page instead of letting the extra photos
+   silently grow the page past one printable A4 sheet (see memory: pages
+   used to stretch unbounded and get clipped by jsPDF on export). */
+.diagram-photo-overflow-note {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--line-strong);
+}
+
+/* ---------- Pre-Purchase Inspection: evaluation ---------- */
+
+.eval-table {
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.eval-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.eval-row-head {
+  grid-template-columns: 1fr 110px;
+  background: var(--panel);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--line-strong);
+  padding: 6px 10px;
+}
+
+.eval-desc-input,
+.eval-cost-input {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink);
+  padding: 3px 2px;
+  min-width: 0;
+}
+
+.eval-desc-input:focus,
+.eval-cost-input:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+.eval-remove-btn {
+  border: none;
+  background: transparent;
+  color: var(--line-strong);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.eval-add-btn {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.eval-overflow-note {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--line-strong);
+  border-bottom: 1px solid var(--line);
+}
+
+.eval-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--panel);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.eval-price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.eval-price-box {
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.eval-price-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--line-strong);
+  margin-bottom: 4px;
+}
+
+.eval-price-input {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  width: 100%;
+}
+
+.eval-price-input:focus {
+  outline: none;
+  background: rgba(26, 86, 219, 0.06);
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  html, body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .pages {
+    padding: 0;
+    gap: 0;
+  }
+  .page {
+    box-shadow: none;
+    width: auto;
+    min-height: auto;
+    page-break-after: always;
+  }
+}
+
+/* Small-screen @container reflow rules were removed — .page now has a hard
+   min-width (see above) that keeps it above the width those breakpoints
+   targeted, so they were unreachable dead code. */

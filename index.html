@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+<title>Servicing Job Card</title>
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#14161a" />
+<link rel="icon" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div id="root">Loading job card&hellip;</div>
+
+<!-- Vendor libraries (local copies, no network required after first setup) -->
+<script src="./vendor/react.production.min.js"></script>
+<script src="./vendor/react-dom.production.min.js"></script>
+<script src="./vendor/htm.js"></script>
+<script src="./vendor/html2canvas.min.js"></script>
+<script src="./vendor/jspdf.umd.min.js"></script>
+<script src="./vendor/firebase-app-compat.js"></script>
+<script src="./vendor/firebase-firestore-compat.js"></script>
+<script src="./vendor/firebase-storage-compat.js"></script>
+<script src="./vendor/firebase-auth-compat.js"></script>
+<script>
+  // htm gives JSX-like syntax via tagged template literals, no compiler needed.
+  var html = htm.bind(React.createElement);
+</script>
+
+<!-- App source -->
+<script src="./src/config.js"></script>
+<script src="./src/firebase-config.js"></script>
+<script src="./src/storage.js"></script>
+<script src="./src/sync.js"></script>
+<script src="./src/App.js"></script>
+<script src="./src/templates/pre-purchase-inspection.js"></script>
+<script src="./src/templates/diagnostics.js"></script>
+<script src="./src/app-shell.js"></script>
+<script src="./src/main.js"></script>
+
+<script>
+  // PWA install + offline support. GitHub Pages (and any static host) serves
+  // this over HTTPS, which is required for service workers to register.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js");
+    });
+  }
+</script>
+</body>
+</html>
