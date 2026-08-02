@@ -1,6 +1,6 @@
 // Bump this whenever any cached file changes, so tablets pick up the update
 // next time they have a connection (old caches are dropped on activate).
-var CACHE_NAME = "job-card-v52";
+var CACHE_NAME = "job-card-v53";
 
 var APP_SHELL = [
   "./",
@@ -60,6 +60,14 @@ self.addEventListener("activate", function (event) {
 // cached there's no reason to hit the network for it again.
 self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
+  // Now that the app is hosted on ams-service-job-card.firebaseapp.com --
+  // the SAME domain as Firebase Auth's own authDomain -- this service
+  // worker's origin-wide scope also covers Firebase's own internal
+  // /__/auth/handler and /__/auth/iframe pages, which signInWithRedirect
+  // depends on. Intercepting/caching those breaks the sign-in handshake,
+  // so let them pass straight through to the network, untouched.
+  var url = new URL(event.request.url);
+  if (url.pathname.indexOf("/__/") === 0) return;
   event.respondWith(
     caches.match(event.request).then(function (cached) {
       return (
