@@ -17,7 +17,15 @@ admin.initializeApp();
 const db = admin.firestore();
 
 const TIMEZONE = "Australia/Sydney";
-const CALENDAR_NAME = "AMS Bookings";
+// "AMS Bookings" calendar ID, from Settings and sharing -> Integrate
+// calendar. Queried directly rather than via calendarList.list(), because
+// sharing a calendar with a service account grants it read access to that
+// calendar ID but never makes the calendar appear in the service account's
+// own calendarList -- that only happens when a real person accepts an
+// email invite, which a service account can't do. Confirmed via testing:
+// calendarList.list() returned zero calendars even with sharing correctly
+// set up, while querying this ID directly works.
+const CALENDAR_ID = "2bb5294927d0e8741203f0086f97ebf6112b2192a9392415da25ab98d5970ab1@group.calendar.google.com";
 
 // Mirrors src/config.js exactly -- keep in sync if the app's field lists change.
 const HEADER_KEYS = ["date", "customer", "email", "mobile", "technician", "make", "model", "registration", "kilometers", "vin", "engineNumber"];
@@ -68,8 +76,14 @@ function parseTitle(title) {
   if (dashIndex === -1) return null;
   const makeModel = rest.slice(0, dashIndex).trim();
   const jobType = rest.slice(dashIndex + 3).trim();
-  const [make, ...modelParts] = makeModel.split(" ");
-  const model = modelParts.join(" ");
+  // Some real bookings prefix the make with a model year (e.g. "2013 Toyota
+  // Aurion") -- strip a leading 4-digit year so Make comes out as just the
+  // manufacturer, keeping the year attached to Model rather than dropping it.
+  const yearMatch = makeModel.match(/^(\d{4})\s+(.+)$/);
+  const modelYear = yearMatch ? yearMatch[1] : "";
+  const makeModelRest = yearMatch ? yearMatch[2] : makeModel;
+  const [make, ...modelParts] = makeModelRest.split(" ");
+  const model = (modelParts.join(" ") + (modelYear ? " (" + modelYear + ")" : "")).trim();
   if (!customer || !registration || !make || !model || !jobType) return null;
   return { customer, registration, make, model, jobType };
 }
@@ -109,49 +123,81 @@ function extractMobile(fullText) {
 // filter line, fluids & filters checklist matches (combining duplicate
 // matches for the same item into one value), and dumps every unmatched
 // line into office notes so nothing from the booking is lost.
+// Some bookings arrive via a third-party booking widget synced into the
+// calendar, whose description text contains literal HTML (<ul><li>...).
+// Convert block-level tags to line breaks before stripping the rest, so
+// "<li>Air filter A1891</li>" becomes its own clean line instead of one
+// starting with a stray "<li>" that no pattern below would ever match.
+function htmlToLines(text) {
+  return (text || "")
+    .replace(/<\s*(li|br|\/li|\/ul|\/ol|\/div|\/p)\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .split(/\r?\n/);
+}
+
 function parseServiceDescription(description) {
   const fluids = {};
   let oilGrade = "";
   let oilFilter = "";
   const unmatchedLines = [];
 
-  const lines = (description || "").split(/\r?\n/);
+  const lines = htmlToLines(description);
+  // "History flags" and "Internal notes" mark real content about the
+  // vehicle, but explicitly NOT part of the current job ("not yet done, not
+  // booked") -- everything from that point on goes to office notes verbatim,
+  // never matched against the current fluids/filters checklist, even if a
+  // line inside it happens to look like "Air filter A1891".
+  let inNotesSection = false;
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
 
-    const serviceMatch = line.match(/^service\s+(.+)$/i);
-    if (serviceMatch) {
-      const value = serviceMatch[1].trim();
-      const lastSlash = value.lastIndexOf("/");
-      if (lastSlash !== -1) {
-        oilGrade = value.slice(0, lastSlash).trim();
-        oilFilter = value.slice(lastSlash + 1).trim();
-      } else {
-        oilGrade = value;
-      }
-      continue;
+    if (!inNotesSection && /^(history flags|internal notes)\b/i.test(line)) {
+      inNotesSection = true;
     }
 
-    let matched = false;
-    for (const item of FLUID_ITEMS) {
-      for (const pattern of item.patterns) {
-        const re = new RegExp("^" + pattern + "\\s*[:\\-]?\\s*(.*)$", "i");
-        const m = line.match(re);
-        if (m) {
-          const value = m[1].trim();
-          if (fluids[item.key]) {
-            fluids[item.key] = value ? fluids[item.key] + " / " + value : fluids[item.key];
-          } else {
-            fluids[item.key] = value;
-          }
-          matched = true;
-          break;
+    if (!inNotesSection) {
+      const serviceMatch = line.match(/^service\s+(.+)$/i);
+      if (serviceMatch) {
+        const value = serviceMatch[1].trim();
+        const lastSlash = value.lastIndexOf("/");
+        if (lastSlash !== -1) {
+          oilGrade = value.slice(0, lastSlash).trim();
+          oilFilter = value.slice(lastSlash + 1).trim();
+        } else {
+          oilGrade = value;
         }
+        continue;
       }
-      if (matched) break;
+
+      let matched = false;
+      for (const item of FLUID_ITEMS) {
+        for (const pattern of item.patterns) {
+          const re = new RegExp("^" + pattern + "\\s*[:\\-]?\\s*(.*)$", "i");
+          const m = line.match(re);
+          if (m) {
+            const value = m[1].trim();
+            if (fluids[item.key]) {
+              fluids[item.key] = value ? fluids[item.key] + " / " + value : fluids[item.key];
+            } else {
+              fluids[item.key] = value;
+            }
+            matched = true;
+            break;
+          }
+        }
+        if (matched) break;
+      }
+      if (matched) continue;
     }
-    if (!matched) unmatchedLines.push(line);
+
+    unmatchedLines.push(line);
   }
 
   return { oilGrade, oilFilter, fluids, officeNotes: unmatchedLines.join("<br>") };
@@ -179,13 +225,6 @@ async function getCalendarClient() {
   return google.calendar({ version: "v3", auth: client });
 }
 
-async function findCalendarId(calendar) {
-  const res = await calendar.calendarList.list();
-  const match = (res.data.items || []).find((c) => c.summary === CALENDAR_NAME);
-  if (!match) throw new Error(`Calendar "${CALENDAR_NAME}" not found in the service account's calendar list -- has it been shared?`);
-  return match.id;
-}
-
 async function jobExistsForEvent(eventId) {
   const snap = await db.collection("jobs").where("calendarEventId", "==", eventId).limit(1).get();
   return !snap.empty;
@@ -193,7 +232,7 @@ async function jobExistsForEvent(eventId) {
 
 function buildServiceJob(parsed, event, dateStr) {
   const desc = parseServiceDescription(event.description || "");
-  const fullText = [event.summary, event.description, event.location].filter(Boolean).join("\n");
+  const fullText = [event.summary, htmlToLines(event.description).join("\n"), event.location].filter(Boolean).join("\n");
 
   const header = {};
   HEADER_KEYS.forEach((k) => (header[k] = ""));
@@ -209,7 +248,14 @@ function buildServiceJob(parsed, event, dateStr) {
   header.technician = extractLabeled(fullText, ["technician"]);
   // kilometers deliberately never auto-populated -- arrival mileage can't be known in advance.
 
+  // Every row key must be present with the client's default shape --
+  // FluidRow (App.js) unconditionally reads fluids[row.key].checkedBy for
+  // every configured row and crashes (blank screen, confirmed via testing)
+  // if a key is missing entirely rather than present-but-unchecked.
   const fluids = {};
+  FLUID_ITEMS.forEach((item) => {
+    fluids[item.key] = { checked: false, checkedBy: "", value: "", valueBy: "" };
+  });
   Object.keys(desc.fluids).forEach((key) => {
     fluids[key] = { checked: true, checkedBy: "", value: desc.fluids[key], valueBy: "" };
   });
@@ -246,10 +292,9 @@ exports.prefillJobsFromCalendar = onSchedule(
   async () => {
     const { start, end, dateStr } = tomorrowRange();
     const calendar = await getCalendarClient();
-    const calendarId = await findCalendarId(calendar);
 
     const res = await calendar.events.list({
-      calendarId,
+      calendarId: CALENDAR_ID,
       timeMin: start.toISOString(),
       timeMax: end.toISOString(),
       singleEvents: true,

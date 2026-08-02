@@ -60,6 +60,24 @@ function SavedJobRow({ job, onResume, onDiscard }) {
   `;
 }
 
+// One column of the three-across status board. Always renders even when its
+// list is empty, so the three columns stay put instead of shuffling sideways
+// as jobs move between them.
+function SavedJobColumn({ title, jobs, onResume, onDiscard }) {
+  return html`
+    <div class="saved-jobs-section">
+      <div class="saved-jobs-title">
+        ${title} <span class="saved-jobs-count">${jobs.length}</span>
+      </div>
+      ${jobs.length === 0
+        ? html`<div class="saved-jobs-empty">None</div>`
+        : jobs.map(
+            (job) => html`<${SavedJobRow} key=${job.id} job=${job} onResume=${onResume} onDiscard=${onDiscard} />`
+          )}
+    </div>
+  `;
+}
+
 function TemplatePicker({ onSelect, onResume, user, onSignOut }) {
   // Cloud is the source of truth once signed in — falls back to whatever's
   // saved on this device if the cloud can't be reached (still fully usable
@@ -117,27 +135,9 @@ function TemplatePicker({ onSelect, onResume, user, onSignOut }) {
       ${(prefilled.length > 0 || inProgress.length > 0 || completed.length > 0) &&
       html`
         <div class="saved-jobs">
-          ${prefilled.length > 0 &&
-          html`
-            <div class="saved-jobs-section">
-              <div class="saved-jobs-title">Pre-filled Job Cards <span class="hint">(from tomorrow's bookings — click Start Job to begin)</span></div>
-              ${prefilled.map((job) => html`<${SavedJobRow} key=${job.id} job=${job} onResume=${onResume} onDiscard=${discardJob} />`)}
-            </div>
-          `}
-          ${inProgress.length > 0 &&
-          html`
-            <div class="saved-jobs-section">
-              <div class="saved-jobs-title">In Progress</div>
-              ${inProgress.map((job) => html`<${SavedJobRow} key=${job.id} job=${job} onResume=${onResume} onDiscard=${discardJob} />`)}
-            </div>
-          `}
-          ${completed.length > 0 &&
-          html`
-            <div class="saved-jobs-section">
-              <div class="saved-jobs-title">Completed <span class="hint">(awaiting your approval)</span></div>
-              ${completed.map((job) => html`<${SavedJobRow} key=${job.id} job=${job} onResume=${onResume} onDiscard=${discardJob} />`)}
-            </div>
-          `}
+          <${SavedJobColumn} title="Pre-filled" jobs=${prefilled} onResume=${onResume} onDiscard=${discardJob} />
+          <${SavedJobColumn} title="In Progress" jobs=${inProgress} onResume=${onResume} onDiscard=${discardJob} />
+          <${SavedJobColumn} title="Completed" jobs=${completed} onResume=${onResume} onDiscard=${discardJob} />
         </div>
       `}
     </div>

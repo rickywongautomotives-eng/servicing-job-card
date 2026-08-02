@@ -203,33 +203,64 @@ button, input, textarea {
 
 /* ---------- Saved job cards (in progress / completed) ---------- */
 
+/* Three-across status board: Pre-filled | In Progress | Completed, all
+   visible in one look without scrolling. Lines up with .template-grid's
+   900px so the board sits flush under the template cards. */
 .saved-jobs {
   width: 100%;
-  max-width: 700px;
-  margin-top: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  max-width: 900px;
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
 }
 
 .saved-jobs-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .saved-jobs-title {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--line-strong);
 }
 
-.saved-jobs-title .hint {
-  text-transform: none;
-  font-weight: 500;
+.saved-jobs-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 10px;
   letter-spacing: 0;
+}
+
+.saved-jobs-empty {
+  padding: 6px 2px;
+  font-size: 12px;
+  color: var(--line-strong);
+  opacity: 0.6;
+}
+
+/* Below ~900px the three columns get too cramped to read a job label, so
+   fall back to the original stacked layout. */
+@media (max-width: 900px) {
+  .saved-jobs {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
 }
 
 .saved-job-row {
@@ -238,7 +269,7 @@ button, input, textarea {
   gap: 8px;
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -247,8 +278,8 @@ button, input, textarea {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 7px 9px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -262,8 +293,8 @@ button, input, textarea {
 
 .saved-job-status {
   flex-shrink: 0;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
 }
 
@@ -282,12 +313,12 @@ button, input, textarea {
 .saved-job-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .saved-job-label {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
   white-space: nowrap;
@@ -295,19 +326,24 @@ button, input, textarea {
   text-overflow: ellipsis;
 }
 
+/* Narrow columns cut this off often, so it needs the same ellipsis
+   treatment as the label rather than wrapping onto a second line. */
 .saved-job-meta {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--line-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .saved-job-discard {
   flex-shrink: 0;
-  width: 44px;
+  width: 30px;
   border: none;
   border-left: 1px solid var(--line);
   background: transparent;
   color: var(--line-strong);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
