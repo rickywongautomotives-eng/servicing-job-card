@@ -11,15 +11,15 @@
 // them; every other field (checklist answers, notes, formatting, statuses)
 // syncs live.
 
-// Offline persistence: queues writes locally (IndexedDB) when the tablet
-// has no connection and replays them automatically once it's back online.
-// synchronizeTabs lets multiple tabs on the same device share one cache.
-firebase
-  .firestore()
-  .enablePersistence({ synchronizeTabs: true })
-  .catch(function (err) {
-    console.error("Firestore offline persistence unavailable:", err);
-  });
+// Offline persistence (queues writes in IndexedDB while offline, replays
+// them once back online) was tried here via enablePersistence(), but it
+// caused "database is closing" failures during Google sign-in specifically
+// on Android Chrome (not desktop) — almost certainly IndexedDB lock
+// contention between Firestore's persistence layer and Auth's own storage
+// use during the sign-in handshake. Turned off: local saves (storage.js)
+// remain fully safe offline regardless; the only loss is that a cloud sync
+// write made while offline won't auto-retry once back online — the user
+// would need to hit Save/Approve again.
 
 function jobsCollection() {
   return firebase.firestore().collection("jobs");
