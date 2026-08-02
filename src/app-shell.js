@@ -180,18 +180,48 @@ function App() {
     return unsubscribe;
   }, []);
 
+  React.useEffect(() => {
+    // Only matters for the redirect path (installed PWA, see isStandalone()
+    // below) — picks up the result after signInWithRedirect sends the
+    // browser back here. Harmless no-op for the popup path.
+    firebase
+      .auth()
+      .getRedirectResult()
+      .catch((err) => {
+        setAuthError(err && err.message ? err.message : String(err));
+      })
+      .finally(() => setSigningIn(false));
+  }, []);
+
+  function isStandalone() {
+    return (
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+      window.navigator.standalone === true
+    );
+  }
+
   function signIn() {
     setAuthError("");
     setSigningIn(true);
     const provider = new firebase.auth.GoogleAuthProvider();
-    // signInWithPopup, not signInWithRedirect: redirect relies on a
-    // cross-origin storage bridge to the *.firebaseapp.com authDomain to
-    // restore the session after bouncing back, and current Chrome's
-    // third-party storage blocking silently breaks that bridge (auth
-    // quietly fails with no error, user just lands back on the sign-in
-    // screen). Popup keeps the whole exchange in a window whose top-level
-    // origin is the authDomain, sidestepping that storage partitioning
-    // issue. Confirmed via testing: redirect silently failed, popup worked.
+    if (isStandalone()) {
+      // Installed PWA (added to home screen on a tablet): signInWithPopup
+      // is unreliable here — Android's handling of window.open() inside a
+      // standalone/TWA context can behave like a second instance of the
+      // app sharing (and fighting over) the same IndexedDB, surfacing as a
+      // "database is closing" error and bouncing back to the home screen.
+      // Redirect avoids that since there's no second window/context.
+      firebase.auth().signInWithRedirect(provider);
+      return;
+    }
+    // Regular browser tab: signInWithRedirect relies on a cross-origin
+    // storage bridge to the *.firebaseapp.com authDomain to restore the
+    // session after bouncing back, and current Chrome's third-party
+    // storage blocking silently breaks that bridge (auth quietly fails
+    // with no error, user just lands back on the sign-in screen). Popup
+    // keeps the whole exchange in a window whose top-level origin is the
+    // authDomain, sidestepping that storage partitioning issue. Confirmed
+    // via testing: redirect silently failed, popup worked, in this context.
     firebase
       .auth()
       .signInWithPopup(provider)
