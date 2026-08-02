@@ -275,6 +275,10 @@ button, input, textarea {
   background: #1a7f37;
 }
 
+.saved-job-status-prefilled {
+  background: #1a56db;
+}
+
 .saved-job-info {
   display: flex;
   flex-direction: column;
@@ -439,6 +443,19 @@ input.office-written[type="checkbox"] {
   align-items: center;
   gap: 24px;
   padding: 24px 12px 60px;
+}
+
+/* Pre-filled (not yet started) or completed-and-not-reopened cards: fully
+   read-only. pointer-events:none blocks every input/checkbox/contentEditable
+   field at once rather than threading a `disabled` prop through dozens of
+   individual field components. */
+.pages-locked {
+  pointer-events: none;
+  user-select: none;
+}
+
+.pages-locked .page {
+  opacity: 0.88;
 }
 
 .page {

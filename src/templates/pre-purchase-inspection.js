@@ -944,6 +944,11 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
   // tracks the card on the device it was saved on.
   const [jobId, setJobId] = React.useState(initialJobId || null);
   const [jobStatus, setJobStatus] = React.useState(initialStatus || "in-progress");
+  const [startedAt, setStartedAt] = React.useState(() => seed("startedAt", null));
+  const [completedAt, setCompletedAt] = React.useState(() => seed("completedAt", null));
+  const isOwner = !!(user && user.email === OWNER_EMAIL);
+  const [editUnlocked, setEditUnlocked] = React.useState(false);
+  const locked = jobStatus === "prefilled" || (jobStatus === "completed" && !editUnlocked);
 
   const pageRefs = React.useRef([]);
   const photoInputRef = React.useRef(null);
@@ -1053,11 +1058,11 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
     return {
       header, diagrams, keys, logbook, ppsr, functionCheck,
       aboveCar, underCar, wheels, tyrePressure, tyreSize,
-      notesLeft, notesRight, evalItems, prices,
+      notesLeft, notesRight, evalItems, prices, startedAt, completedAt,
     };
   }
 
-  function persistJob(status) {
+  function persistJob(status, stateOverrides) {
     const id = jobId || generateJobId();
     if (!jobId) setJobId(id);
     const job = {
@@ -1066,7 +1071,7 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
       status,
       label: buildJobLabel(header),
       savedAt: Date.now(),
-      state: buildSaveableState(),
+      state: Object.assign(buildSaveableState(), stateOverrides || {}),
     };
     saveJob(job);
     syncSaveJob(job, user && user.email).catch((err) => {
@@ -1085,10 +1090,25 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
     }
   }
 
-  function markComplete() {
-    setJobStatus("completed");
+  function startJob() {
+    const startedAtTs = Date.now();
+    setJobStatus("in-progress");
+    setStartedAt(startedAtTs);
     try {
-      persistJob("completed");
+      persistJob("in-progress", { startedAt: startedAtTs });
+    } catch (err) {
+      console.error(err);
+      setExportError("Save failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  function markComplete() {
+    const completedAtTs = completedAt || Date.now();
+    setJobStatus("completed");
+    setCompletedAt(completedAtTs);
+    setEditUnlocked(false);
+    try {
+      persistJob("completed", { completedAt: completedAtTs });
       onChangeTemplate();
     } catch (err) {
       console.error(err);
@@ -1215,24 +1235,38 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
         <div class="topbar-actions">
           ${exportError && html`<span class="export-error">${exportError}</span>`}
           <button type="button" class="btn btn-secondary" onClick=${changeTemplate}>← Templates</button>
-          <button type="button" class="btn btn-secondary" onClick=${resetAll}>New card / Clear all</button>
-          <button type="button" class="btn btn-secondary" onClick=${saveProgress}>Save Progress</button>
-          ${jobStatus === "completed"
+          ${jobStatus === "prefilled"
             ? html`
-                <button type="button" class="btn btn-primary" onClick=${approveJob} disabled=${exporting}>
-                  ${exporting ? "Approving…" : "Approve"}
-                </button>
+                <button type="button" class="btn btn-primary" onClick=${startJob}>Start Job</button>
               `
             : html`
-                <button type="button" class="btn btn-secondary" onClick=${markComplete}>Mark Complete</button>
+                ${jobStatus !== "completed" &&
+                html`<button type="button" class="btn btn-secondary" onClick=${resetAll}>New card / Clear all</button>`}
+                ${(jobStatus !== "completed" || editUnlocked) &&
+                html`<button type="button" class="btn btn-secondary" onClick=${saveProgress}>Save Progress</button>`}
+                ${jobStatus === "completed"
+                  ? html`
+                      ${isOwner && !editUnlocked &&
+                      html`
+                        <button type="button" class="btn btn-secondary" onClick=${() => setEditUnlocked(true)}>
+                          Edit
+                        </button>
+                      `}
+                      <button type="button" class="btn btn-primary" onClick=${approveJob} disabled=${exporting}>
+                        ${exporting ? "Approving…" : "Approve"}
+                      </button>
+                    `
+                  : html`
+                      <button type="button" class="btn btn-secondary" onClick=${markComplete}>Mark Complete</button>
+                    `}
+                <button type="button" class="btn btn-primary" onClick=${exportPDF} disabled=${exporting}>
+                  ${exporting ? "Exporting…" : "Export as PDF"}
+                </button>
               `}
-          <button type="button" class="btn btn-primary" onClick=${exportPDF} disabled=${exporting}>
-            ${exporting ? "Exporting…" : "Export as PDF"}
-          </button>
         </div>
       </header>
 
-      <main class="pages">
+      <main class=${"pages" + (locked ? " pages-locked" : "")}>
         ${pages.map((desc, i) => {
           const setRef = (el) => {
             pageRefs.current[i] = el;

@@ -6,7 +6,11 @@
       ".firebaserc",
       ".firebase-cli/**",
       ".git/**",
-      "**/.*"
+      "**/.*",
+      "functions/**"
     ]
+  },
+  "functions": {
+    "source": "functions"
   }
 }

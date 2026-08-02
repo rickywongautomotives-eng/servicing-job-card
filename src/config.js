@@ -1,5 +1,10 @@
 // Static field/row definitions shared by App.js. Plain globals (no module system, no build step).
 
+// The only account exempt from the "locked after completion" rule and
+// allowed to reopen a completed card via the Edit button — matches the sole
+// address in firestore.rules/storage.rules' allowlist.
+var OWNER_EMAIL = "rickywongautomotives@gmail.com";
+
 var HEADER_FIELDS = [
   { key: "date", label: "Date", type: "date" },
   { key: "customer", label: "Customer", type: "text" },

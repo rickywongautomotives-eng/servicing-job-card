@@ -38,11 +38,16 @@ function formatSavedAt(ts) {
   return datePart + ", " + timePart;
 }
 
+var SAVED_JOB_STATUS_CLASS = {
+  completed: "saved-job-status-complete",
+  prefilled: "saved-job-status-prefilled",
+};
+
 function SavedJobRow({ job, onResume, onDiscard }) {
   return html`
     <div class="saved-job-row">
       <button type="button" class="saved-job-main" onClick=${() => onResume(job)}>
-        <span class=${"saved-job-status " + (job.status === "completed" ? "saved-job-status-complete" : "saved-job-status-progress")}></span>
+        <span class=${"saved-job-status " + (SAVED_JOB_STATUS_CLASS[job.status] || "saved-job-status-progress")}></span>
         <span class="saved-job-info">
           <span class="saved-job-label">${job.label}</span>
           <span class="saved-job-meta">${TEMPLATE_LABELS[job.template] || job.template} · ${formatSavedAt(job.savedAt)}</span>
@@ -84,7 +89,8 @@ function TemplatePicker({ onSelect, onResume, user, onSignOut }) {
     syncDeleteJob(id).catch((err) => console.error(err));
   }
 
-  const inProgress = jobs.filter((j) => j.status !== "completed").sort((a, b) => b.savedAt - a.savedAt);
+  const prefilled = jobs.filter((j) => j.status === "prefilled").sort((a, b) => b.savedAt - a.savedAt);
+  const inProgress = jobs.filter((j) => j.status !== "completed" && j.status !== "prefilled").sort((a, b) => b.savedAt - a.savedAt);
   const completed = jobs.filter((j) => j.status === "completed").sort((a, b) => b.savedAt - a.savedAt);
 
   return html`
@@ -108,9 +114,16 @@ function TemplatePicker({ onSelect, onResume, user, onSignOut }) {
         )}
       </div>
 
-      ${(inProgress.length > 0 || completed.length > 0) &&
+      ${(prefilled.length > 0 || inProgress.length > 0 || completed.length > 0) &&
       html`
         <div class="saved-jobs">
+          ${prefilled.length > 0 &&
+          html`
+            <div class="saved-jobs-section">
+              <div class="saved-jobs-title">Pre-filled Job Cards <span class="hint">(from tomorrow's bookings — click Start Job to begin)</span></div>
+              ${prefilled.map((job) => html`<${SavedJobRow} key=${job.id} job=${job} onResume=${onResume} onDiscard=${discardJob} />`)}
+            </div>
+          `}
           ${inProgress.length > 0 &&
           html`
             <div class="saved-jobs-section">

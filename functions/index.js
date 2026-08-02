@@ -1,0 +1,302 @@
+// Scheduled Cloud Function: reads the "AMS Bookings" Google Calendar once a
+// day and auto-creates a "prefilled" job card in Firestore for each booking
+// happening tomorrow, so a tech opens the app to find tomorrow's jobs
+// already sitting there instead of typing everything from scratch.
+//
+// Field-mapping rules here were worked out directly against real booking
+// examples with the workshop owner -- see the "prefilled" section of
+// job_card_project.md memory for the full reasoning. Do not change the
+// parsing rules without re-confirming against a real booking.
+
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { logger } = require("firebase-functions");
+const admin = require("firebase-admin");
+const { google } = require("googleapis");
+
+admin.initializeApp();
+const db = admin.firestore();
+
+const TIMEZONE = "Australia/Sydney";
+const CALENDAR_NAME = "AMS Bookings";
+
+// Mirrors src/config.js exactly -- keep in sync if the app's field lists change.
+const HEADER_KEYS = ["date", "customer", "email", "mobile", "technician", "make", "model", "registration", "kilometers", "vin", "engineNumber"];
+const CARD_CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const FLUID_ITEMS = [
+  { key: "engineFlush", patterns: ["engine flush"] },
+  { key: "airFilter", patterns: ["air filter"] },
+  { key: "cabinFilter", patterns: ["cabin filter"] },
+  { key: "fuelFilter", patterns: ["fuel filter"] },
+  { key: "brakeFluid", patterns: ["brake flush", "brake fluid"] },
+  { key: "coolant", patterns: ["coolant"] },
+  { key: "clutchFluid", patterns: ["clutch fluid"] },
+  { key: "sparkPlugs", patterns: ["spark plug"] },
+  { key: "transCaseOil", patterns: ["transfer case oil", "trans case oil"] },
+  { key: "autoOil", patterns: ["auto oil", "automatic oil"] },
+  { key: "manualOil", patterns: ["manual oil"] },
+  { key: "fDiffOil", patterns: ["front diff oil", "f/diff oil", "f diff oil"] },
+  { key: "rDiffOil", patterns: ["rear diff oil", "r/diff oil", "r diff oil"] },
+  { key: "driveBelts", patterns: ["drive belt"] },
+];
+
+function generateJobId() {
+  return Date.now() + "-" + Math.random().toString(36).slice(2);
+}
+
+function generateCardCode() {
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += CARD_CODE_CHARS[Math.floor(Math.random() * CARD_CODE_CHARS.length)];
+  }
+  return code;
+}
+
+function buildJobLabel(header) {
+  const parts = [header.customer, [header.make, header.model].filter(Boolean).join(" ")].filter(Boolean);
+  return parts.length ? parts.join(" — ") : header.registration || "Untitled job";
+}
+
+// "Dereck Luc/1LZ7YS/Toyota Landcruiser Prado - Service" ->
+// { customer, registration, make, model, jobType }
+function parseTitle(title) {
+  const slashParts = (title || "").split("/");
+  if (slashParts.length < 3) return null;
+  const customer = slashParts[0].trim();
+  const registration = slashParts[1].trim();
+  const rest = slashParts.slice(2).join("/"); // in case make/model itself contains a slash
+  const dashIndex = rest.lastIndexOf(" - ");
+  if (dashIndex === -1) return null;
+  const makeModel = rest.slice(0, dashIndex).trim();
+  const jobType = rest.slice(dashIndex + 3).trim();
+  const [make, ...modelParts] = makeModel.split(" ");
+  const model = modelParts.join(" ");
+  if (!customer || !registration || !make || !model || !jobType) return null;
+  return { customer, registration, make, model, jobType };
+}
+
+// Returns "service" | "ppi" -- combined ("pre purchase + service") and any
+// unrecognized job type both fall back to "service" per the owner's call.
+function classifyJobType(jobType) {
+  const t = (jobType || "").toLowerCase();
+  const hasPrePurchase = t.includes("pre purchase") || t.includes("pre-purchase");
+  const hasService = t.includes("service");
+  if (hasPrePurchase && !hasService) return "ppi";
+  return "service";
+}
+
+// Conservative extraction: only pulls a value when it's clearly labeled, so
+// a false match never silently lands in the wrong field.
+function extractLabeled(fullText, labelPatterns) {
+  for (const label of labelPatterns) {
+    const re = new RegExp(label + "\\s*[:\\-]\\s*([^\\n\\r]+)", "i");
+    const m = fullText.match(re);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  return "";
+}
+
+function extractEmail(fullText) {
+  const m = fullText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return m ? m[0] : "";
+}
+
+function extractMobile(fullText) {
+  const m = fullText.match(/\b0[2-478][\s-]?\d{4}[\s-]?\d{4}\b/);
+  return m ? m[0].trim() : "";
+}
+
+// Parses the description body for a General Service booking: oil grade/
+// filter line, fluids & filters checklist matches (combining duplicate
+// matches for the same item into one value), and dumps every unmatched
+// line into office notes so nothing from the booking is lost.
+function parseServiceDescription(description) {
+  const fluids = {};
+  let oilGrade = "";
+  let oilFilter = "";
+  const unmatchedLines = [];
+
+  const lines = (description || "").split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const serviceMatch = line.match(/^service\s+(.+)$/i);
+    if (serviceMatch) {
+      const value = serviceMatch[1].trim();
+      const lastSlash = value.lastIndexOf("/");
+      if (lastSlash !== -1) {
+        oilGrade = value.slice(0, lastSlash).trim();
+        oilFilter = value.slice(lastSlash + 1).trim();
+      } else {
+        oilGrade = value;
+      }
+      continue;
+    }
+
+    let matched = false;
+    for (const item of FLUID_ITEMS) {
+      for (const pattern of item.patterns) {
+        const re = new RegExp("^" + pattern + "\\s*[:\\-]?\\s*(.*)$", "i");
+        const m = line.match(re);
+        if (m) {
+          const value = m[1].trim();
+          if (fluids[item.key]) {
+            fluids[item.key] = value ? fluids[item.key] + " / " + value : fluids[item.key];
+          } else {
+            fluids[item.key] = value;
+          }
+          matched = true;
+          break;
+        }
+      }
+      if (matched) break;
+    }
+    if (!matched) unmatchedLines.push(line);
+  }
+
+  return { oilGrade, oilFilter, fluids, officeNotes: unmatchedLines.join("<br>") };
+}
+
+function tomorrowRange() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" })
+    .formatToParts(now)
+    .reduce((acc, p) => ((acc[p.type] = p.value), acc), {});
+  const todaySydney = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00+10:00`);
+  // Note: fixed +10:00 offset (AEST); DST (+11:00, AEDT) is a known
+  // simplification -- acceptable since this only shifts the window by an
+  // hour, not which calendar day counts as "tomorrow".
+  const tomorrowStart = new Date(todaySydney.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowEnd = new Date(tomorrowStart.getTime() + 24 * 60 * 60 * 1000);
+  return { start: tomorrowStart, end: tomorrowEnd, dateStr: `${parts.year}-${parts.month}-${String(Number(parts.day) + 1).padStart(2, "0")}` };
+}
+
+async function getCalendarClient() {
+  const auth = new google.auth.GoogleAuth({
+    scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+  });
+  const client = await auth.getClient();
+  return google.calendar({ version: "v3", auth: client });
+}
+
+async function findCalendarId(calendar) {
+  const res = await calendar.calendarList.list();
+  const match = (res.data.items || []).find((c) => c.summary === CALENDAR_NAME);
+  if (!match) throw new Error(`Calendar "${CALENDAR_NAME}" not found in the service account's calendar list -- has it been shared?`);
+  return match.id;
+}
+
+async function jobExistsForEvent(eventId) {
+  const snap = await db.collection("jobs").where("calendarEventId", "==", eventId).limit(1).get();
+  return !snap.empty;
+}
+
+function buildServiceJob(parsed, event, dateStr) {
+  const desc = parseServiceDescription(event.description || "");
+  const fullText = [event.summary, event.description, event.location].filter(Boolean).join("\n");
+
+  const header = {};
+  HEADER_KEYS.forEach((k) => (header[k] = ""));
+  header.date = dateStr;
+  header.customer = parsed.customer;
+  header.registration = parsed.registration;
+  header.make = parsed.make;
+  header.model = parsed.model;
+  header.email = extractEmail(fullText);
+  header.mobile = extractMobile(fullText);
+  header.vin = extractLabeled(fullText, ["vin", "vin number", "vin no"]);
+  header.engineNumber = extractLabeled(fullText, ["engine no", "engine number"]);
+  header.technician = extractLabeled(fullText, ["technician"]);
+  // kilometers deliberately never auto-populated -- arrival mileage can't be known in advance.
+
+  const fluids = {};
+  Object.keys(desc.fluids).forEach((key) => {
+    fluids[key] = { checked: true, checkedBy: "", value: desc.fluids[key], valueBy: "" };
+  });
+
+  return {
+    template: "general-service",
+    header,
+    oilSpec: { oilGrade: desc.oilGrade, oilFilter: desc.oilFilter },
+    fluids,
+    officeNotes: desc.officeNotes,
+  };
+}
+
+function buildPpiJob(parsed, dateStr) {
+  const header = {};
+  HEADER_KEYS.forEach((k) => (header[k] = ""));
+  header.date = dateStr;
+  header.customer = parsed.customer;
+  header.registration = parsed.registration;
+  header.make = parsed.make;
+  header.model = parsed.model;
+  return { template: "pre-purchase-inspection", header };
+}
+
+const SERVICE_ACCOUNT_EMAIL = "firebase-adminsdk-fbsvc@ams-service-job-card.iam.gserviceaccount.com";
+
+exports.prefillJobsFromCalendar = onSchedule(
+  {
+    schedule: "0 6 * * *",
+    timeZone: TIMEZONE,
+    region: "australia-southeast1",
+    serviceAccount: SERVICE_ACCOUNT_EMAIL,
+  },
+  async () => {
+    const { start, end, dateStr } = tomorrowRange();
+    const calendar = await getCalendarClient();
+    const calendarId = await findCalendarId(calendar);
+
+    const res = await calendar.events.list({
+      calendarId,
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+    });
+
+    const events = res.data.items || [];
+    logger.info(`Found ${events.length} booking(s) for ${dateStr}`);
+
+    for (const event of events) {
+      try {
+        if (await jobExistsForEvent(event.id)) {
+          logger.info(`Skipping ${event.id} -- already prefilled`);
+          continue;
+        }
+        const parsed = parseTitle(event.summary);
+        if (!parsed) {
+          logger.warn(`Could not parse title, skipping: "${event.summary}"`);
+          continue;
+        }
+
+        const kind = classifyJobType(parsed.jobType);
+        const partial = kind === "ppi" ? buildPpiJob(parsed, dateStr) : buildServiceJob(parsed, event, dateStr);
+
+        const id = generateJobId();
+        await db
+          .collection("jobs")
+          .doc(id)
+          .set({
+            template: partial.template,
+            status: "prefilled",
+            label: buildJobLabel(partial.header),
+            savedAt: Date.now(),
+            updatedBy: "calendar-sync",
+            calendarEventId: event.id,
+            state: {
+              cardCode: generateCardCode(),
+              header: partial.header,
+              oilSpec: partial.oilSpec,
+              fluids: partial.fluids,
+              officeNotes: partial.officeNotes,
+            },
+          });
+        logger.info(`Created prefilled ${partial.template} job for "${parsed.customer}" (${event.id})`);
+      } catch (err) {
+        logger.error(`Failed to process event ${event.id}`, err);
+      }
+    }
+  }
+);

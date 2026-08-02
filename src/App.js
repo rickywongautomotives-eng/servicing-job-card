@@ -566,6 +566,15 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // tracks the card on the device it was saved on.
   const [jobId, setJobId] = React.useState(initialJobId || null);
   const [jobStatus, setJobStatus] = React.useState(initialStatus || "in-progress");
+  const [startedAt, setStartedAt] = React.useState(() => seed("startedAt", null));
+  const [completedAt, setCompletedAt] = React.useState(() => seed("completedAt", null));
+  // Completed cards are read-only for everyone except the owner, and even
+  // the owner has to deliberately click Edit each time — this is a
+  // per-session toggle, not something that gets saved, so a completed card
+  // always opens locked by default.
+  const isOwner = !!(user && user.email === OWNER_EMAIL);
+  const [editUnlocked, setEditUnlocked] = React.useState(false);
+  const locked = jobStatus === "prefilled" || (jobStatus === "completed" && !editUnlocked);
 
   const page1Ref = React.useRef(null);
   const page2Ref = React.useRef(null);
@@ -728,11 +737,11 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       officeNotes, officeNotesBy, aboveCar, underCar, underCarBy,
       wheels, tyrePressure, tyreSize,
       notes2Left, notes2LeftBy, notes2Right, notes2RightBy,
-      photos, cardCode,
+      photos, cardCode, startedAt, completedAt,
     };
   }
 
-  function persistJob(status) {
+  function persistJob(status, stateOverrides) {
     const id = jobId || generateJobId();
     if (!jobId) setJobId(id);
     const job = {
@@ -741,7 +750,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       status,
       label: buildJobLabel(header),
       savedAt: Date.now(),
-      state: buildSaveableState(),
+      state: Object.assign(buildSaveableState(), stateOverrides || {}),
     };
     saveJob(job); // full data (incl. photos) stays on this device regardless
     syncSaveJob(job, user && user.email).catch((err) => {
@@ -763,10 +772,33 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     }
   }
 
-  function markComplete() {
-    setJobStatus("completed");
+  // A pre-filled card is read-only until the tech deliberately starts it —
+  // this is what actually stamps the start time and moves it into "In
+  // Progress" on the picker. Stays on the card afterward (now unlocked)
+  // rather than bouncing back to the picker, since the tech is right there
+  // about to begin working on it.
+  function startJob() {
+    const startedAtTs = Date.now();
+    setJobStatus("in-progress");
+    setStartedAt(startedAtTs);
     try {
-      persistJob("completed");
+      persistJob("in-progress", { startedAt: startedAtTs });
+    } catch (err) {
+      console.error(err);
+      setExportError("Save failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  // completedAt is stamped once and never overwritten by a later
+  // re-completion after the owner reopens the card via Edit — "we can still
+  // go with the original completed stamp time" was explicit.
+  function markComplete() {
+    const completedAtTs = completedAt || Date.now();
+    setJobStatus("completed");
+    setCompletedAt(completedAtTs);
+    setEditUnlocked(false);
+    try {
+      persistJob("completed", { completedAt: completedAtTs });
       onChangeTemplate();
     } catch (err) {
       console.error(err);
@@ -870,35 +902,55 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           <button type="button" class="btn btn-secondary" onClick=${changeTemplate}>
             ← Templates
           </button>
-          <button type="button" class="btn btn-secondary" onClick=${resetAll}>
-            New card / Clear all
-          </button>
-          <button type="button" class="btn btn-secondary" onClick=${saveProgress}>
-            Save Progress
-          </button>
-          ${jobStatus === "completed"
+          ${jobStatus === "prefilled"
             ? html`
-                <button type="button" class="btn btn-primary" onClick=${approveJob} disabled=${exporting}>
-                  ${exporting ? "Approving…" : "Approve"}
+                <button type="button" class="btn btn-primary" onClick=${startJob}>
+                  Start Job
                 </button>
               `
             : html`
-                <button type="button" class="btn btn-secondary" onClick=${markComplete}>
-                  Mark Complete
+                ${jobStatus !== "completed" &&
+                html`
+                  <button type="button" class="btn btn-secondary" onClick=${resetAll}>
+                    New card / Clear all
+                  </button>
+                `}
+                ${(jobStatus !== "completed" || editUnlocked) &&
+                html`
+                  <button type="button" class="btn btn-secondary" onClick=${saveProgress}>
+                    Save Progress
+                  </button>
+                `}
+                ${jobStatus === "completed"
+                  ? html`
+                      ${isOwner && !editUnlocked &&
+                      html`
+                        <button type="button" class="btn btn-secondary" onClick=${() => setEditUnlocked(true)}>
+                          Edit
+                        </button>
+                      `}
+                      <button type="button" class="btn btn-primary" onClick=${approveJob} disabled=${exporting}>
+                        ${exporting ? "Approving…" : "Approve"}
+                      </button>
+                    `
+                  : html`
+                      <button type="button" class="btn btn-secondary" onClick=${markComplete}>
+                        Mark Complete
+                      </button>
+                    `}
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  onClick=${exportPDF}
+                  disabled=${exporting}
+                >
+                  ${exporting ? "Exporting…" : "Export as PDF"}
                 </button>
               `}
-          <button
-            type="button"
-            class="btn btn-primary"
-            onClick=${exportPDF}
-            disabled=${exporting}
-          >
-            ${exporting ? "Exporting…" : "Export as PDF"}
-          </button>
         </div>
       </header>
 
-      <main class="pages">
+      <main class=${"pages" + (locked ? " pages-locked" : "")}>
         <section class="page" id="page1" ref=${page1Ref}>
           <div class="page-label">Page 1</div>
 
