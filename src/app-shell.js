@@ -200,39 +200,49 @@ function App() {
     );
   }
 
+  // Popup-based sign-in has shown real crashes on Android Chrome (a
+  // "database is closing" IndexedDB error), reproduced both installed and
+  // in a plain browser tab — likely Android suspending the backgrounded
+  // main tab while the popup is open, killing its open DB connections
+  // mid-handshake. Route every mobile browser to redirect instead, not
+  // just installed/standalone ones.
+  function isMobile() {
+    return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  }
+
   function signIn() {
     setAuthError("");
     setSigningIn(true);
     const provider = new firebase.auth.GoogleAuthProvider();
-    if (isStandalone()) {
-      // Installed PWA (added to home screen on a tablet): signInWithPopup
-      // is unreliable here — Android's handling of window.open() inside a
-      // standalone/TWA context can behave like a second instance of the
-      // app sharing (and fighting over) the same IndexedDB, surfacing as a
-      // "database is closing" error and bouncing back to the home screen.
-      // Redirect avoids that since there's no second window/context.
-      firebase.auth().signInWithRedirect(provider);
-      return;
-    }
-    // Regular browser tab: signInWithRedirect relies on a cross-origin
-    // storage bridge to the *.firebaseapp.com authDomain to restore the
-    // session after bouncing back, and current Chrome's third-party
-    // storage blocking silently breaks that bridge (auth quietly fails
-    // with no error, user just lands back on the sign-in screen). Popup
-    // keeps the whole exchange in a window whose top-level origin is the
-    // authDomain, sidestepping that storage partitioning issue. Confirmed
-    // via testing: redirect silently failed, popup worked, in this context.
     firebase
       .auth()
-      .signInWithPopup(provider)
-      .catch((err) => {
-        if (err && err.code === "auth/popup-blocked") {
-          setAuthError("Your browser blocked the sign-in popup. Please allow popups for this site and try again.");
-        } else if (err && err.code !== "auth/cancelled-popup-request" && err.code !== "auth/popup-closed-by-user") {
-          setAuthError(err && err.message ? err.message : String(err));
+      .setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+      .then(function () {
+        if (isStandalone() || isMobile()) {
+          firebase.auth().signInWithRedirect(provider);
+          return;
         }
-      })
-      .finally(() => setSigningIn(false));
+        // Regular desktop browser tab: signInWithRedirect relies on a
+        // cross-origin storage bridge to the *.firebaseapp.com authDomain
+        // to restore the session after bouncing back, and current
+        // Chrome's third-party storage blocking silently breaks that
+        // bridge (auth quietly fails with no error, user just lands back
+        // on the sign-in screen). Popup keeps the whole exchange in a
+        // window whose top-level origin is the authDomain, sidestepping
+        // that storage partitioning issue. Confirmed via testing:
+        // redirect silently failed, popup worked, in this context.
+        return firebase
+          .auth()
+          .signInWithPopup(provider)
+          .catch((err) => {
+            if (err && err.code === "auth/popup-blocked") {
+              setAuthError("Your browser blocked the sign-in popup. Please allow popups for this site and try again.");
+            } else if (err && err.code !== "auth/cancelled-popup-request" && err.code !== "auth/popup-closed-by-user") {
+              setAuthError(err && err.message ? err.message : String(err));
+            }
+          })
+          .finally(() => setSigningIn(false));
+      });
   }
 
   function signOut() {
