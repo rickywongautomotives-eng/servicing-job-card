@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Same allowlist as firestore.rules — keep the two lists in step when
+// adding or removing staff. This bucket holds the exported job card PDFs
+// backed up on Approve (job-pdfs/{jobId}.pdf).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function allowedEmails() {
+      return [
+        'rickywongautomotives@gmail.com', // Ricky (owner / office)
+        'kynan.l53@gmail.com'             // technician
+      ];
+    }
+
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in allowedEmails();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if isStaff();
+    }
+  }
+}

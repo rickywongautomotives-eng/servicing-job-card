@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Who is allowed into the job card data. Google Sign-In on its own only
+// proves someone owns SOME Google account — it does not say they work here —
+// so access is an explicit allowlist. To add a technician, add their Gmail
+// address to ALLOWED_EMAILS below and redeploy:
+//
+//   firebase deploy --only firestore:rules,storage
+//
+// The scheduled Cloud Function that pre-fills tomorrow's bookings runs with
+// the Admin SDK, which bypasses these rules entirely — it does not need to
+// be listed here.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function allowedEmails() {
+      return [
+        'rickywongautomotives@gmail.com', // Ricky (owner / office)
+        'kynan.l53@gmail.com'             // technician
+      ];
+    }
+
+    // email_verified matters: without it, anyone able to mint a token
+    // claiming an allowlisted address would get in.
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in allowedEmails();
+    }
+
+    match /jobs/{jobId} {
+      allow read, write: if isStaff();
+    }
+
+    // Anything not explicitly matched above stays denied by default.
+  }
+}
