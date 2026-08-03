@@ -148,7 +148,10 @@ var PRE_SERVICE_REAR_ITEMS = [
   { key: "park", label: "Park" },
   { key: "plates", label: "Plates" },
   { key: "brakeLight", label: "Brake Light" },
-  { key: "reverseLight", label: "Reverse Light" },
+  // "Reverse Light" wrapped onto a second line in the narrow rear column,
+  // making that one row twice the height of every other. It's unambiguous on
+  // its own in a lights checklist.
+  { key: "reverseLight", label: "Reverse" },
   { key: "indicators", label: "Indicators" },
 ];
 
@@ -181,7 +184,11 @@ var STATUS_OPTIONS_CONDITION = [
 
 // Ruled-line guides drawn behind notes boxes (as real bordered divs, not a
 // CSS gradient — html2canvas doesn't render gradients).
-var NOTES_LINE_INDEXES = Array.from({ length: 12 }, (_, i) => i);
+// Exactly the number of 24px lines that fit .notes-lined-wrap (260px). Was
+// 12, which drew two-and-a-bit lines below the visible area — invisible, but
+// it also meant the blank-line prefill below over-provisioned into space
+// that could never be written on. Keep this in step with that CSS height.
+var NOTES_LINE_INDEXES = Array.from({ length: 10 }, (_, i) => i);
 
 // For boxes that flex-fill whatever space is left (height not known ahead of
 // time) — generous enough to cover any realistic fill area; the wrap's

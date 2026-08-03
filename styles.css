@@ -1090,11 +1090,15 @@ input.office-written[type="checkbox"] {
   outline: 2px solid var(--accent);
 }
 
-/* Fixed height (80% of the old fill-to-bottom size) — the reclaimed
-   space goes back to Fluids & Filters / Pre-Service Checks below. */
+/* Sized to hold a whole number of 24px ruled lines. At 246px the usable
+   area was 229px — nine lines (216px) plus half a wasted line — so raising
+   it to 260px buys a full tenth line (240px needed) for only 14px, and
+   page 1 has 23px of slack below this box to spend. Keep this a multiple of
+   the line height plus the 16px padding and 1px border, or the last ruled
+   line ends up half-visible. */
 .notes-lined-wrap {
   position: relative;
-  height: 246px;
+  height: 260px;
   flex: 0 0 auto;
 }
 
