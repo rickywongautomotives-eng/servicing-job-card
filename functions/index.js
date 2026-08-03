@@ -167,11 +167,43 @@ function isBoilerplate(line) {
   return BOILERPLATE_PATTERNS.some((re) => re.test(line));
 }
 
+// "Workshop Software: last invoice 05/01/2026 (...)" -> "Last invoice
+// 05/01/2026 (...)". The invoice history only ever comes from Workshop
+// Software, so naming it every time costs 19 characters of a box that only
+// holds nine lines -- and this is the longest line the notes ever carry, the
+// one that pushed the Aurion card over its limit.
+function tidyNotesLine(line) {
+  const match = line.match(/^workshop software\s*:\s*(.+)$/i);
+  if (!match) return line;
+  const rest = match[1].trim();
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
+// Inside "History flags", consumable/service items (the things that appear on
+// the Fluids & Filters checklist, plus the battery) each take a whole line
+// for very little text -- "Air filter A1891" is 16 characters of a 9-line
+// box. Once there are a few of them they get collapsed onto one line.
+//
+// Threshold of 3 rather than "always": with only one or two there's nothing
+// to gain, and merging unrelated observations reads worse. The Aurion has
+// four (battery/air/cabin/brake) and needs it; the Nissan Patrol has two
+// coolant remarks that are better left as they are, and its notes already
+// fit.
+var SERVICE_ITEM_GROUP_THRESHOLD = 3;
+
+function isServiceItemLine(line) {
+  if (/^battery\b/i.test(line)) return true;
+  return FLUID_ITEMS.some((item) =>
+    item.patterns.some((pattern) => new RegExp("^" + pattern + "\\b", "i").test(line))
+  );
+}
+
 function parseServiceDescription(description) {
   const fluids = {};
   let oilGrade = "";
   let oilFilter = "";
   const unmatchedLines = [];
+  const serviceItemIndexes = [];
 
   const lines = htmlToLines(description);
   // "History flags" and "Internal notes" mark real content about the
@@ -248,7 +280,19 @@ function parseServiceDescription(description) {
       if (matched) continue;
     }
 
-    unmatchedLines.push(line);
+    if (inNotesSection && isServiceItemLine(line)) serviceItemIndexes.push(unmatchedLines.length);
+    unmatchedLines.push(tidyNotesLine(line));
+  }
+
+  if (serviceItemIndexes.length >= SERVICE_ITEM_GROUP_THRESHOLD) {
+    const merged = serviceItemIndexes.map((i) => unmatchedLines[i]).join(" / ");
+    // Placed where the first of them sat, so the surrounding notes keep
+    // their original order; the rest are removed back-to-front so the
+    // earlier indexes stay valid while splicing.
+    for (let i = serviceItemIndexes.length - 1; i >= 1; i--) {
+      unmatchedLines.splice(serviceItemIndexes[i], 1);
+    }
+    unmatchedLines[serviceItemIndexes[0]] = merged;
   }
 
   return { oilGrade, oilFilter, fluids, officeNotes: unmatchedLines.join("<br>") };
