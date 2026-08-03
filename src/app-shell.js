@@ -229,6 +229,12 @@ function App() {
     setAuthError("");
     setSigningIn(true);
     const provider = new firebase.auth.GoogleAuthProvider();
+    // Always show Google's account chooser. Signing out of this app does not
+    // sign the browser out of Google, so with a single Google session Google
+    // silently reuses it and you get straight back in as the same person —
+    // which makes it impossible to hand the tablet to a tech, or to test a
+    // second account, without clearing the whole browser profile.
+    provider.setCustomParameters({ prompt: "select_account" });
     firebase
       .auth()
       .setPersistence(firebase.auth.Auth.Persistence.LOCAL)
