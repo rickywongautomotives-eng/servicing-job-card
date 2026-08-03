@@ -568,6 +568,7 @@ function DiagramNotes({ view, data, onChange, exportMode }) {
       </div>
       <${RichText}
         className="notes-box ruled-fill"
+        limitToBox=${true}
         value=${data.note}
         onChange=${(html) => onChange(view.key, { note: html })}
         multiline=${true}
@@ -1647,6 +1648,7 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
                     </div>
                     <${RichText}
                       className="notes-box book-notes ruled-fill"
+                      limitToBox=${true}
                       value=${notesLeft}
                       onChange=${setNotesLeft}
                       multiline=${true}
@@ -1659,6 +1661,7 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
                     </div>
                     <${RichText}
                       className="notes-box book-notes ruled-fill"
+                      limitToBox=${true}
                       value=${notesRight}
                       onChange=${setNotesRight}
                       multiline=${true}

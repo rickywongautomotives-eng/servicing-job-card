@@ -185,6 +185,66 @@ function resizeImageFile(file) {
   });
 }
 
+// Caret position as a plain character offset from the start of the field.
+// Both helpers measure the same way (Range.toString()), so an offset taken
+// before an edit lines back up after the edit is undone.
+function getCaretOffset(root) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  if (!root.contains(range.endContainer)) return null;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(root);
+  pre.setEnd(range.endContainer, range.endOffset);
+  return pre.toString().length;
+}
+
+function setCaretOffset(root, offset) {
+  if (offset == null) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let remaining = offset;
+  let target = null;
+  while (walker.nextNode()) {
+    const len = walker.currentNode.textContent.length;
+    if (remaining <= len) {
+      target = walker.currentNode;
+      break;
+    }
+    remaining -= len;
+  }
+  const range = document.createRange();
+  if (target) {
+    range.setStart(target, Math.max(0, Math.min(remaining, target.textContent.length)));
+  } else {
+    range.selectNodeContents(root);
+  }
+  range.collapse(target ? true : false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// True when the caret has been pushed past the bottom of the visible box.
+// These ruled notes boxes are overflow:hidden with no scrollbar (by design),
+// but the browser still scrolls them internally to keep the caret in view —
+// so a non-zero scrollTop is the signal that writing has run off the end of
+// the printed lines. The caret rectangle is checked as well, since the
+// scroll only kicks in once there is somewhere to scroll to.
+function caretPastBottom(el) {
+  if (el.scrollTop > 0) return true;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.endContainer)) return false;
+  const caret = range.getBoundingClientRect();
+  if (!caret || (caret.top === 0 && caret.bottom === 0)) return false;
+  const box = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  const limit =
+    box.bottom - parseFloat(style.paddingBottom || 0) - parseFloat(style.borderBottomWidth || 0);
+  return caret.bottom > limit + 1;
+}
+
 // Lets a tech bold/underline/colour part of what they've written to flag it
 // as important (e.g. "brake pads near minimum" in red). Backs onto a plain
 // contentEditable div rather than an <input>/<textarea> — those can't hold
@@ -199,7 +259,7 @@ function resizeImageFile(file) {
 // on mount and when it changes from something OTHER than this element's own
 // last reported edit (e.g. resuming a saved job, or Clear All) — ordinary
 // typing never touches innerHTML from the React side.
-function RichText({ value, onChange, exportMode, className, placeholder, multiline, disabled }) {
+function RichText({ value, onChange, exportMode, className, placeholder, multiline, disabled, limitToBox }) {
   const elRef = React.useRef(null);
   const lastReportedRef = React.useRef(value);
   // Kept current on every render so the stable ref callback below can read
@@ -229,11 +289,28 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
     if (el) {
       el.innerHTML = valueRef.current || "";
       lastReportedRef.current = valueRef.current;
+      // Baseline for the limitToBox rollback — whatever the field is
+      // hydrated with is, by definition, an accepted state.
+      lastGoodRef.current = {
+        html: el.innerHTML,
+        length: el.textContent.length,
+        caret: null,
+      };
     }
   }, []);
 
   const [toolbarPos, setToolbarPos] = React.useState(null);
   const toolbarRef = React.useRef(null);
+  // Text already sitting past the last ruled line (e.g. notes auto-filled
+  // from a long booking, written before this limit existed). It can't be
+  // silently hidden — that's exactly the problem this is fixing — so the
+  // field flags it instead.
+  const [overflowing, setOverflowing] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!limitToBox || !elRef.current) return;
+    setOverflowing(elRef.current.scrollHeight > elRef.current.clientHeight + 1);
+  }, [value, limitToBox]);
 
   // Live sync means `value` can now change because the OTHER person edited
   // this field. Rewriting innerHTML while this field has focus would drop
@@ -251,6 +328,13 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
     elRef.current.innerHTML = next || "";
     lastReportedRef.current = next;
     pendingRemoteRef.current = null;
+    // A value arriving from outside (resume, Clear All, the other person's
+    // live edit) becomes the new rollback baseline.
+    lastGoodRef.current = {
+      html: elRef.current.innerHTML,
+      length: elRef.current.textContent.length,
+      caret: null,
+    };
   }, []);
 
   React.useEffect(() => {
@@ -315,6 +399,51 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
     }
   }
 
+  // --- Keeping writing inside the printed ruled lines (limitToBox) ---
+  //
+  // These notes boxes have a fixed number of ruled lines and are
+  // overflow:hidden with no scrollbar (deliberately — a scrollbar has no
+  // meaning on something designed to be printed). Without a guard, text
+  // simply carried on past the last line, invisible on screen AND missing
+  // from the exported PDF, with nothing to indicate it was there.
+  //
+  // Anything that SHRINKS the content is always allowed, otherwise a box
+  // that is already over-full could never be edited back down to size.
+  //
+  // This deliberately does NOT use a beforeinput snapshot: React's synthetic
+  // onBeforeInput is built on the legacy textInput event and doesn't fire for
+  // every kind of edit (confirmed by testing — an insert sailed straight past
+  // the guard). Instead the last ACCEPTED state is kept, which is by
+  // definition the state to roll back to if the next edit doesn't fit.
+  const lastGoodRef = React.useRef(null);
+
+  function rememberGood(el) {
+    lastGoodRef.current = {
+      html: el.innerHTML,
+      length: el.textContent.length,
+      caret: getCaretOffset(el),
+    };
+  }
+
+  function handleInput() {
+    const el = elRef.current;
+    if (limitToBox && el) {
+      const good = lastGoodRef.current;
+      const grew = good && el.textContent.length > good.length;
+      if (grew && caretPastBottom(el)) {
+        el.innerHTML = good.html;
+        el.scrollTop = 0;
+        setCaretOffset(el, good.caret);
+        lastReportedRef.current = good.html;
+        setOverflowing(el.scrollHeight > el.clientHeight + 1);
+        return; // rejected: this edit never reaches the saved job
+      }
+      rememberGood(el);
+      setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    }
+    report();
+  }
+
   if (exportMode) {
     return html`
       <div
@@ -331,13 +460,20 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
         class=${(className || "") + " rich-text" + (multiline ? " rich-text-multiline" : " rich-text-inline")}
         contentEditable=${!disabled}
         data-placeholder=${placeholder || ""}
-        onInput=${report}
+        onInput=${handleInput}
         onBlur=${handleBlur}
         onKeyDown=${handleKeyDown}
         onMouseUp=${updateToolbar}
         onKeyUp=${updateToolbar}
         onTouchEnd=${updateToolbar}
       ></div>
+      ${limitToBox &&
+      overflowing &&
+      html`
+        <span class="rich-text-overflow no-print" title="This text sits past the last ruled line, so it won't show on screen or in the exported PDF. Shorten the note to bring it back.">
+          ⚠ text hidden below
+        </span>
+      `}
       ${toolbarPos &&
       html`
         <div
@@ -1335,6 +1471,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             </div>
             <${RichText}
               className=${"notes-box ruled-fill" + (officeNotesBy === "office" ? " office-written" : "")}
+              limitToBox=${true}
               value=${officeNotes}
               onChange=${updateOfficeNotes}
               multiline=${true}
@@ -1418,6 +1555,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               </div>
               <${RichText}
                 className=${"notes-box book-notes ruled-fill" + (notes2LeftBy === "office" ? " office-written" : "")}
+                limitToBox=${true}
                 value=${notes2Left}
                 onChange=${updateNotes2Left}
                 multiline=${true}
@@ -1431,6 +1569,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               </div>
               <${RichText}
                 className=${"notes-box book-notes ruled-fill" + (notes2RightBy === "office" ? " office-written" : "")}
+                limitToBox=${true}
                 value=${notes2Right}
                 onChange=${updateNotes2Right}
                 multiline=${true}

@@ -1114,6 +1114,26 @@ input.office-written[type="checkbox"] {
   box-sizing: border-box;
 }
 
+/* Flags a notes box whose text runs past the last ruled line. Such text is
+   invisible on screen and missing from the exported PDF, so it must never be
+   silent. Sits on top of the box's bottom-right corner; .no-print keeps it
+   off print, and it's conditionally rendered so it can't reach the PDF
+   (see the memory note: .no-print alone does nothing during html2canvas). */
+.rich-text-overflow {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--danger, #c0271d);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  pointer-events: none;
+}
+
 .ruled-fill {
   position: absolute;
   inset: 0;
