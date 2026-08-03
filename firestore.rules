@@ -17,7 +17,8 @@ service cloud.firestore {
     function allowedEmails() {
       return [
         'rickywongautomotives@gmail.com', // Ricky (owner / office)
-        'kynan.l53@gmail.com'             // technician
+        'kynan.l53@gmail.com',            // technician
+        'lanle3174@gmail.com'             // technician
       ];
     }
 
