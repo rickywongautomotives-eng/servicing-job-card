@@ -191,6 +191,11 @@ function tidyNotesLine(line) {
 // fit.
 var SERVICE_ITEM_GROUP_THRESHOLD = 3;
 
+// Ruled lines in the Page 1 office notes box (NOTES_LINE_INDEXES in
+// src/config.js). Notes are padded with blank lines to this many so every
+// ruled line can be clicked into.
+var OFFICE_NOTES_LINE_COUNT = 10;
+
 function isServiceItemLine(line) {
   if (/^battery\b/i.test(line)) return true;
   return FLUID_ITEMS.some((item) =>
@@ -294,6 +299,15 @@ function parseServiceDescription(description) {
     }
     unmatchedLines[serviceItemIndexes[0]] = merged;
   }
+
+  // Pad out to a full box of blank lines. A contenteditable can only put the
+  // cursor where content already exists, so notes ending after (say) line 6
+  // leave the remaining ruled lines dead -- clicking them just drops the
+  // cursor back at the end of the last line, and the technician can't write
+  // on them. The app does the same thing for blank cards via
+  // NOTES_BLANK_VALUE; keep this count in step with NOTES_LINE_INDEXES in
+  // src/config.js and the .notes-lined-wrap height in styles.css.
+  while (unmatchedLines.length < OFFICE_NOTES_LINE_COUNT) unmatchedLines.push("");
 
   return { oilGrade, oilFilter, fluids, officeNotes: unmatchedLines.join("<br>") };
 }

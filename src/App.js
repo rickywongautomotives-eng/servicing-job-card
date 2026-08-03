@@ -307,10 +307,38 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
   // field flags it instead.
   const [overflowing, setOverflowing] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!limitToBox || !elRef.current) return;
-    setOverflowing(elRef.current.scrollHeight > elRef.current.clientHeight + 1);
-  }, [value, limitToBox]);
+  // Must be called AFTER the DOM has been given the current value. As its own
+  // effect keyed on `value` it ran before applyValueToDom's effect and so
+  // measured the previous contents, which flagged boxes that actually fit.
+  const measureOverflow = React.useCallback(() => {
+    const el = elRef.current;
+    if (!limitToBox || !el) return;
+    if (el.scrollHeight <= el.clientHeight + 1) {
+      setOverflowing(false);
+      return;
+    }
+    // Overflowing on raw height — but these boxes are deliberately pre-filled
+    // with blank lines so every ruled line can be clicked into, and the page 2
+    // notes carry 40 of them in a box that shows about nine. Counting those
+    // put a permanent "text hidden below" warning on boxes that were empty.
+    // Only trailing blank lines are discounted; anything with real text past
+    // the last rule still warns.
+    const trimmed = el.innerHTML.replace(/(?:\s|&nbsp;|<br\s*\/?>)+$/i, "");
+    if (trimmed === el.innerHTML) {
+      setOverflowing(true);
+      return;
+    }
+    const probe = el.cloneNode(false);
+    probe.style.cssText =
+      "position:absolute;visibility:hidden;pointer-events:none;left:0;top:0;right:auto;bottom:auto;height:auto;max-height:none;overflow:visible;width:" +
+      el.offsetWidth +
+      "px;";
+    probe.innerHTML = trimmed;
+    el.parentNode.appendChild(probe);
+    const needed = probe.scrollHeight;
+    probe.remove();
+    setOverflowing(needed > el.clientHeight + 1);
+  }, [limitToBox]);
 
   // Live sync means `value` can now change because the OTHER person edited
   // this field. Rewriting innerHTML while this field has focus would drop
@@ -339,7 +367,8 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
 
   React.useEffect(() => {
     applyValueToDom(value);
-  }, [value, applyValueToDom]);
+    measureOverflow();
+  }, [value, applyValueToDom, measureOverflow]);
 
   function handleBlur() {
     if (pendingRemoteRef.current !== null) applyValueToDom(pendingRemoteRef.current);
@@ -435,11 +464,11 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
         el.scrollTop = 0;
         setCaretOffset(el, good.caret);
         lastReportedRef.current = good.html;
-        setOverflowing(el.scrollHeight > el.clientHeight + 1);
+        measureOverflow();
         return; // rejected: this edit never reaches the saved job
       }
       rememberGood(el);
-      setOverflowing(el.scrollHeight > el.clientHeight + 1);
+      measureOverflow();
     }
     report();
   }

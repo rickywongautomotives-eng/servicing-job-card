@@ -1090,16 +1090,33 @@ input.office-written[type="checkbox"] {
   outline: 2px solid var(--accent);
 }
 
-/* Sized to hold a whole number of 24px ruled lines. At 246px the usable
-   area was 229px — nine lines (216px) plus half a wasted line — so raising
-   it to 260px buys a full tenth line (240px needed) for only 14px, and
-   page 1 has 23px of slack below this box to spend. Keep this a multiple of
-   the line height plus the 16px padding and 1px border, or the last ruled
-   line ends up half-visible. */
+/* Holds exactly ten 24px ruled lines with nothing wasted:
+     1px border + 6px top padding + (10 x 24) = 247, in a 248px box.
+   The overrides below are scoped to this wrapper rather than changing
+   .ruled-fill/.notes-lines globally, because the page 2 book notes and the
+   PPI boxes share those classes and are laid out differently.
+   Keep this height, the 6px padding and NOTES_LINE_INDEXES in step. */
 .notes-lined-wrap {
   position: relative;
-  height: 260px;
+  height: 248px;
   flex: 0 0 auto;
+}
+
+/* The border moves onto the ruled backdrop so the editable layer can sit
+   flush inside it. Previously .ruled-fill carried the border AND 8px of
+   padding top and bottom, which ate 18px of the box — that's what left a
+   dead 12px strip under the last rule and pushed the first line down. */
+.notes-lined-wrap .notes-lines {
+  border: 1px solid var(--line);
+  padding: 6px 8px 0;
+}
+
+/* inset:1px sits it inside that border, so text lines and ruled lines start
+   at the same y. No bottom padding: the tenth line needs every pixel. */
+.notes-lined-wrap .ruled-fill {
+  inset: 1px;
+  border: none;
+  padding: 6px 8px 0;
 }
 
 .notes-lines {
