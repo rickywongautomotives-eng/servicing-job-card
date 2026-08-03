@@ -781,7 +781,13 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
 
   const kilometersMissing = !header.kilometers || !header.kilometers.trim();
   const logbookMissing = !preService.logbook.status;
-  const page2Locked = kilometersMissing || logbookMissing;
+  // Page 2 stays gated behind "kilometres + logbook recorded first" for
+  // technicians, since that's the point of the gate — those two get captured
+  // on arrival before anything else. The office/owner is exempt: they need to
+  // be able to correct any part of a card at any time, and kilometres is
+  // never auto-filled, so the gate would otherwise be permanently shut on a
+  // freshly pre-filled booking.
+  const page2Locked = (kilometersMissing || logbookMissing) && !isOffice;
 
   const updateHeader = (key, value) => {
     setHeader((prev) => ({ ...prev, [key]: value }));
@@ -1230,13 +1236,11 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               status=${preService[LOGBOOK_ITEM.key].status}
               onChange=${(v) => updatePreServiceSimple(LOGBOOK_ITEM.key, v)}
               options=${STATUS_OPTIONS_LOGBOOK}
-              disabled=${isOffice}
             />
             <${SimpleCheckRow}
               label=${ENGINE_LIGHT_ITEM.label}
               status=${preService[ENGINE_LIGHT_ITEM.key].status}
               onChange=${(v) => updatePreServiceSimple(ENGINE_LIGHT_ITEM.key, v)}
-              disabled=${isOffice}
             />
           </div>
 
@@ -1285,7 +1289,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                     onStatus=${(k, v) => updatePreServiceStatus("front", k, v)}
                     onNote=${(k, v) => updatePreServiceNote("front", k, v)}
                     exportMode=${exportMode}
-                    toggleDisabled=${isOffice}
                   />
                 `
               )}
@@ -1297,7 +1300,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 exportMode=${exportMode}
                 options=${STATUS_OPTIONS_CONDITION}
                 notePlaceholder="note"
-                toggleDisabled=${isOffice}
               />
             </div>
             <div class="prelights-col">
@@ -1311,7 +1313,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                     onStatus=${(k, v) => updatePreServiceStatus("rear", k, v)}
                     onNote=${(k, v) => updatePreServiceNote("rear", k, v)}
                     exportMode=${exportMode}
-                    toggleDisabled=${isOffice}
                   />
                 `
               )}
@@ -1323,7 +1324,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 exportMode=${exportMode}
                 options=${STATUS_OPTIONS_CONDITION}
                 notePlaceholder="note"
-                toggleDisabled=${isOffice}
               />
             </div>
           </div>
@@ -1373,7 +1373,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                     onStatus=${updateAboveCarStatus}
                     onNote=${updateAboveCarNote}
                     disabled=${page2Locked}
-                    toggleDisabled=${isOffice}
                     exportMode=${exportMode}
                   />
                 `
@@ -1388,7 +1387,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 onChange=${updateWheel}
                 onPressureChange=${updateTyrePressure}
                 onSizeChange=${updateTyreSize}
-                disabled=${page2Locked || isOffice}
+                disabled=${page2Locked}
                 exportMode=${exportMode}
               />
             </div>
