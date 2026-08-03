@@ -15,6 +15,19 @@
       "**/.*",
       "functions/**",
       "*.rules"
+    ],
+    "headers": [
+      {
+        // Firebase's default for static files is max-age=3600, which means a
+        // deploy can keep serving hour-old JS/CSS — the app looks updated
+        // (service worker version bumps) while still running old code. This
+        // app has no build step and no content hashes in filenames, so the
+        // only safe setting is revalidate-every-time. "no-cache" still allows
+        // caching, it just forces a freshness check first, so unchanged files
+        // come back as a cheap 304 rather than a full download.
+        "source": "**/*.@(js|css|html|json)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
     ]
   },
   "functions": {
