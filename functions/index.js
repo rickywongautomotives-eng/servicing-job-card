@@ -141,6 +141,32 @@ function htmlToLines(text) {
     .split(/\r?\n/);
 }
 
+// Boilerplate the booking system adds to every description. None of it
+// belongs on the printed card: Phone/Email/Vehicle already populate the
+// header fields, and the booking code, requested drop-off window and sync
+// timestamp are administrative noise. The office notes box only fits about
+// nine lines, so every line spent on this is a line lost to something the
+// technician actually needs.
+//
+// Note "Service:" WITH a colon is the booking system's own summary
+// ("Service: thermostat union + RWC check") and is dropped, whereas
+// "Service 0W-30 ENVIRO+ C2 7.5L/Z418" (no colon, a space) is the oil spec
+// and is parsed below. The colon is the whole difference -- don't loosen it.
+const BOILERPLATE_PATTERNS = [
+  /^booking\s*#/i,
+  /^manual booking\b/i,
+  /^phone\s*:/i,
+  /^email\s*:/i,
+  /^vehicle\s*:/i,
+  /^service\s*:/i,
+  /^customer requested\b/i,
+  /^last synced\b/i,
+];
+
+function isBoilerplate(line) {
+  return BOILERPLATE_PATTERNS.some((re) => re.test(line));
+}
+
 function parseServiceDescription(description) {
   const fluids = {};
   let oilGrade = "";
@@ -154,11 +180,36 @@ function parseServiceDescription(description) {
   // never matched against the current fluids/filters checklist, even if a
   // line inside it happens to look like "Air filter A1891".
   let inNotesSection = false;
+  let inInternalNotes = false;
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
 
-    if (!inNotesSection && /^(history flags|internal notes)\b/i.test(line)) {
+    // "Internal notes" is office-side chatter and is dropped in full,
+    // heading and contents (the owner's explicit call). It runs until the
+    // next recognisable section begins.
+    if (/^internal notes\b/i.test(line)) {
+      inNotesSection = true; // also stops fluids matching from here on
+      inInternalNotes = true;
+      continue;
+    }
+    if (inInternalNotes) {
+      if (/^(history flags|workshop software)\b/i.test(line) || isBoilerplate(line)) {
+        inInternalNotes = false;
+      } else {
+        continue;
+      }
+    }
+
+    if (isBoilerplate(line)) continue;
+
+    // "History flags" IS kept -- it's real information about the vehicle --
+    // but it describes work that is explicitly NOT part of this job ("not
+    // yet done, not booked"), so from here on nothing is matched against the
+    // current fluids/filters checklist. That matters: these sections really
+    // do contain lines like "Air filter A1891" and "Brake flush DOT 3",
+    // which would otherwise be ticked as if they were today's work.
+    if (!inNotesSection && /^history flags\b/i.test(line)) {
       inNotesSection = true;
     }
 
