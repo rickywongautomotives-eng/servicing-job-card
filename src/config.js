@@ -195,6 +195,14 @@ var NOTES_LINE_INDEXES = Array.from({ length: 10 }, (_, i) => i);
 // overflow:hidden clips whatever doesn't fit.
 var FILL_LINE_INDEXES = Array.from({ length: 40 }, (_, i) => i);
 
+// How many ruled lines to DRAW behind a notes box. Deliberately far more than
+// any box shows: the boxes scroll now, and the backdrop is scrolled in step
+// with the text, so there have to be lines waiting below the fold or long
+// notes would scroll onto blank paper. Unused ones cost nothing — the
+// backdrop clips them. Separate from the *prefill* counts above, which decide
+// how many blank lines a box starts with.
+var RULE_DRAW_INDEXES = Array.from({ length: 60 }, (_, i) => i);
+
 // A plain empty textarea can only place the cursor at position 0 — clicking
 // a blank ruled line further down just snaps back to the top, since there's
 // no actual content there yet. Pre-filling with blank lines (newlines only,

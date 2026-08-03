@@ -1142,7 +1142,8 @@ input.office-written[type="checkbox"] {
    (see the memory note: .no-print alone does nothing during html2canvas). */
 .rich-text-overflow {
   position: absolute;
-  right: 6px;
+  /* Clear of the 8px scrollbar these boxes now show. */
+  right: 14px;
   bottom: 4px;
   z-index: 2;
   padding: 1px 7px;
@@ -1161,11 +1162,25 @@ input.office-written[type="checkbox"] {
   background: transparent;
   line-height: 24px;
   resize: none;
-  /* The pre-filled blank lines (so any ruled line is clickable) usually
-     over-provision past the box's actual visible height — that's fine, the
-     extra lines just aren't reachable, but a bare textarea would otherwise
-     show a scrollbar for that unused overflow. */
-  overflow: hidden;
+  /* Scrolls rather than clipping, so a long note can still be read on screen.
+     The ruled backdrop is scrolled in lockstep from JS (see syncRuledLines in
+     App.js) — without that, text would slide out of alignment with the
+     printed lines as soon as you scrolled. Anything scrolled out of view is
+     still absent from the exported PDF, which is what .rich-text-overflow
+     warns about. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+
+/* Keep the scrollbar from covering the last few characters of a line. */
+.ruled-fill::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ruled-fill::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(122, 128, 140, 0.45);
 }
 
 /* Flexible-height counterpart to .notes-lined-wrap: fills whatever space

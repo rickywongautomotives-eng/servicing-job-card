@@ -564,7 +564,7 @@ function DiagramNotes({ view, data, onChange, exportMode }) {
   return html`
     <div class="diagram-notes-wrap">
       <div class="notes-lines">
-        ${DIAGRAM_NOTES_LINE_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
+        ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
       </div>
       <${RichText}
         className="notes-box ruled-fill"
@@ -1644,7 +1644,7 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
                 <div class="book-wrap">
                   <div class="book-page">
                     <div class="notes-lines">
-                      ${FILL_LINE_INDEXES.map((idx) => html`<div class="notes-line" key=${idx}></div>`)}
+                      ${RULE_DRAW_INDEXES.map((idx) => html`<div class="notes-line" key=${idx}></div>`)}
                     </div>
                     <${RichText}
                       className="notes-box book-notes ruled-fill"
@@ -1657,7 +1657,7 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
                   </div>
                   <div class="book-page">
                     <div class="notes-lines">
-                      ${FILL_LINE_INDEXES.map((idx) => html`<div class="notes-line" key=${idx}></div>`)}
+                      ${RULE_DRAW_INDEXES.map((idx) => html`<div class="notes-line" key=${idx}></div>`)}
                     </div>
                     <${RichText}
                       className="notes-box book-notes ruled-fill"
