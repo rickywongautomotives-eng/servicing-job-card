@@ -1,6 +1,6 @@
-// Bump this whenever any cached file changes, so tablets pick up the update
+﻿// Bump this whenever any cached file changes, so tablets pick up the update
 // next time they have a connection (old caches are dropped on activate).
-var CACHE_NAME = "job-card-v55";
+var CACHE_NAME = "job-card-v58";
 
 var APP_SHELL = [
   "./",
@@ -33,7 +33,16 @@ var APP_SHELL = [
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(APP_SHELL);
+      // {cache: "reload"} matters: Firebase Hosting serves these files with
+      // max-age=3600, so a plain cache.addAll() can be answered from the
+      // browser's HTTP cache and quietly bake a STALE file into the brand
+      // new cache — the version number changes but the code doesn't. Forcing
+      // a network fetch here is what makes bumping CACHE_NAME actually work.
+      return cache.addAll(
+        APP_SHELL.map(function (url) {
+          return new Request(url, { cache: "reload" });
+        })
+      );
     })
   );
   self.skipWaiting();

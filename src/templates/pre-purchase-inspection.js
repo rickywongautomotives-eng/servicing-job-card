@@ -589,7 +589,12 @@ function DiagramPhotoGrid({ view, photos, exportMode, onRemovePhoto, overflowCou
         ${photos.map(
           (photo) => html`
             <div class="diagram-photo-card" key=${photo.id}>
-              <img src=${photo.dataUrl} alt=${view.label + " photo"} />
+              <div
+                class="diagram-photo-fill"
+                role="img"
+                aria-label=${view.label + " photo"}
+                style=${{ backgroundImage: 'url("' + photo.dataUrl + '")' }}
+              ></div>
               ${!exportMode &&
               html`
                 <button
@@ -1122,6 +1127,14 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
     setExportMode(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 50));
+      // Every diagram view keeps its own photo list, so flatten them all
+      // before preloading (see preloadPhotoUrls in App.js for why).
+      await preloadPhotoUrls(
+        PPI_DIAGRAM_VIEWS.reduce(
+          (urls, view) => urls.concat((diagrams[view.key].photos || []).map((p) => p.dataUrl)),
+          []
+        )
+      );
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
       const pages = pageRefs.current.filter(Boolean);
@@ -1130,6 +1143,7 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
           scale: 2,
           useCORS: true,
           backgroundColor: "#ffffff",
+          imageTimeout: 30000,
         });
         const imgData = canvas.toDataURL("image/jpeg", 0.95);
         const pageWidth = 210;
@@ -1474,7 +1488,12 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
                   ${desc.photos.map(
                     (photo) => html`
                       <div class="diagram-photo-card" key=${photo.id}>
-                        <img src=${photo.dataUrl} alt=${desc.view.label + " photo"} />
+                        <div
+                          class="diagram-photo-fill"
+                          role="img"
+                          aria-label=${desc.view.label + " photo"}
+                          style=${{ backgroundImage: 'url("' + photo.dataUrl + '")' }}
+                        ></div>
                         ${!exportMode &&
                         html`
                           <button

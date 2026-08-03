@@ -1,5 +1,26 @@
 // Main application: state, layout (page 1 + page 2), and PDF export.
 
+// Shared by every template that exports photos. html2canvas gives up on any
+// image it can't resolve within its imageTimeout and just leaves a blank
+// space — which is why photos would sometimes vanish from the exported PDF
+// while looking fine on screen. Forcing each one through the browser's image
+// cache first means html2canvas's own load resolves immediately.
+// Always resolves (never rejects): a photo that genuinely can't decode
+// shouldn't take the whole export down with it.
+function preloadPhotoUrls(urls) {
+  return Promise.all(
+    urls.map(
+      (url) =>
+        new Promise((resolve) => {
+          const img = new Image();
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = url;
+        })
+    )
+  );
+}
+
 // Shared by every template that captures photos: downscales to
 // PHOTO_MAX_DIMENSION on the longest side and re-encodes as JPEG so exported
 // PDFs stay a reasonable size.
@@ -822,6 +843,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       // Let React re-render with plain-text stand-ins for every input/textarea
       // before capturing — html2canvas can't reliably paint live input values.
       await new Promise((resolve) => setTimeout(resolve, 50));
+      await preloadPhotoUrls(photos.map((p) => p.dataUrl));
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
       const photoPageCount = Math.ceil(photos.length / PHOTOS_PER_PAGE);
@@ -831,6 +853,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           scale: 2,
           useCORS: true,
           backgroundColor: "#ffffff",
+          imageTimeout: 30000,
         });
         const imgData = canvas.toDataURL("image/jpeg", 0.95);
         const pageWidth = 210;
@@ -1247,7 +1270,12 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                   ${pagePhotos.map(
                     (photo) => html`
                       <div class="photo-card" key=${photo.id}>
-                        <img class="photo-img" src=${photo.dataUrl} alt="Job photo" />
+                        <div
+                          class="photo-img"
+                          role="img"
+                          aria-label="Job photo"
+                          style=${{ backgroundImage: 'url("' + photo.dataUrl + '")' }}
+                        ></div>
                         ${!exportMode &&
                         html`
                           <button

@@ -50,7 +50,9 @@ function SavedJobRow({ job, onResume, onDiscard }) {
         <span class=${"saved-job-status " + (SAVED_JOB_STATUS_CLASS[job.status] || "saved-job-status-progress")}></span>
         <span class="saved-job-info">
           <span class="saved-job-label">${job.label}</span>
-          <span class="saved-job-meta">${TEMPLATE_LABELS[job.template] || job.template} · ${formatSavedAt(job.savedAt)}</span>
+          <span class="saved-job-meta">
+            <span class="saved-job-template">${TEMPLATE_LABELS[job.template] || job.template}</span> · ${formatSavedAt(job.savedAt)}
+          </span>
         </span>
       </button>
       <button type="button" class="saved-job-discard" onClick=${() => onDiscard(job.id)} aria-label="Discard job card">
