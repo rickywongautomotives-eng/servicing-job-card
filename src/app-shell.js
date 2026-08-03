@@ -137,7 +137,7 @@ function TemplatePicker({ onSelect, onResume, user, onSignOut }) {
       ${(prefilled.length > 0 || inProgress.length > 0 || completed.length > 0) &&
       html`
         <div class="saved-jobs">
-          <${SavedJobColumn} title="Pre-filled" jobs=${prefilled} onResume=${onResume} onDiscard=${discardJob} />
+          <${SavedJobColumn} title="Jobs" jobs=${prefilled} onResume=${onResume} onDiscard=${discardJob} />
           <${SavedJobColumn} title="In Progress" jobs=${inProgress} onResume=${onResume} onDiscard=${discardJob} />
           <${SavedJobColumn} title="Completed" jobs=${completed} onResume=${onResume} onDiscard=${discardJob} />
         </div>
