@@ -371,6 +371,43 @@ button, input, textarea {
   color: var(--danger);
 }
 
+/* Live-sync indicator in the card topbar. Pulses briefly whenever the other
+   side's edit lands, so it's obvious the two screens are actually talking. */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(26, 127, 55, 0.15);
+  color: #7ee2a0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: background 0.3s ease;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2ea043;
+}
+
+.live-badge-active {
+  background: rgba(26, 127, 55, 0.45);
+}
+
+.live-badge-off {
+  background: rgba(192, 118, 12, 0.18);
+  color: #f0b757;
+}
+
+.live-badge-off .live-dot {
+  background: #c2760c;
+}
+
 .topbar {
   position: sticky;
   top: 0;

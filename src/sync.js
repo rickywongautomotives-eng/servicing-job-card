@@ -30,22 +30,30 @@ function jobsCollection() {
 // PPI's per-view `diagrams.<key>.photos` arrays. `id`/`syncedLocally` are
 // kept so the UI can tell "this photo exists, just not on this device"
 // apart from "no photo was ever taken here".
+// Deliberately does NOT deep-clone: live sync calls this on every keystroke
+// to diff the card, and JSON-cloning multi-megabyte base64 photo strings
+// that are about to be thrown away made typing stutter. Shallow copies plus
+// fresh arrays/objects only where photos actually get replaced is enough to
+// leave the caller's state untouched.
+function photoStub(p) {
+  return { id: p.id, dataUrl: null, syncedLocally: true };
+}
+
 function stripPhotosForSync(state) {
-  var copy = JSON.parse(JSON.stringify(state || {}));
+  var copy = Object.assign({}, state || {});
   if (Array.isArray(copy.photos)) {
-    copy.photos = copy.photos.map(function (p) {
-      return { id: p.id, dataUrl: null, syncedLocally: true };
-    });
+    copy.photos = copy.photos.map(photoStub);
   }
   if (copy.diagrams) {
+    var diagrams = {};
     Object.keys(copy.diagrams).forEach(function (key) {
       var view = copy.diagrams[key];
-      if (view && Array.isArray(view.photos)) {
-        view.photos = view.photos.map(function (p) {
-          return { id: p.id, dataUrl: null, syncedLocally: true };
-        });
-      }
+      diagrams[key] =
+        view && Array.isArray(view.photos)
+          ? Object.assign({}, view, { photos: view.photos.map(photoStub) })
+          : view;
     });
+    copy.diagrams = diagrams;
   }
   return copy;
 }
@@ -81,6 +89,102 @@ function subscribeToJobs(onChange, onError) {
     });
     onChange(jobs);
   }, onError);
+}
+
+// ---------- Live per-card sync (tech tablet <-> office desktop) ----------
+//
+// subscribeToJobs above watches the whole LIST (which card is in which
+// column). These next few are what make a single OPEN card update live
+// while two people are editing it at once.
+//
+// The important part is that edits are written as individual field paths
+// rather than as one whole `state` blob. If both sides wrote the entire
+// document, whoever saved last would silently wipe the other's work — the
+// office correcting a customer's phone number would erase whatever the tech
+// ticked in the 3 seconds before. Writing only what actually changed lets
+// Firestore merge the two edits server-side.
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+// Walks two versions of the state and returns a flat map of
+// { "state.header.customer": "Bob", ... } for every leaf that differs.
+// Arrays are treated as single leaves (photo lists, evaluation rows) — item
+// level merging inside an array isn't meaningful here and would be fragile.
+function collectChangedPaths(prev, next, prefix, out) {
+  out = out || {};
+  var keys = {};
+  Object.keys(prev || {}).forEach(function (k) { keys[k] = true; });
+  Object.keys(next || {}).forEach(function (k) { keys[k] = true; });
+  Object.keys(keys).forEach(function (k) {
+    var a = prev ? prev[k] : undefined;
+    var b = next ? next[k] : undefined;
+    var path = prefix ? prefix + "." + k : k;
+    if (isPlainObject(a) && isPlainObject(b)) {
+      collectChangedPaths(a, b, path, out);
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
+      // Firestore rejects undefined outright; nothing in this app's state
+      // legitimately goes from "present" to "absent", so null is a safe
+      // stand-in for the rare case where a key disappears.
+      out[path] = b === undefined ? null : b;
+    }
+  });
+  return out;
+}
+
+function pathIsSkipped(path, skipPaths) {
+  if (!skipPaths) return false;
+  var keys = Object.keys(skipPaths);
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    // Skip if it's the same field, or either side is a parent of the other
+    // (e.g. local edited "fluids.airFilter.value", remote changed
+    // "fluids.airFilter" wholesale).
+    if (path === k || path.indexOf(k + ".") === 0 || k.indexOf(path + ".") === 0) return true;
+  }
+  return false;
+}
+
+// Produces a new local state with only the leaves that CHANGED REMOTELY
+// taken from the remote copy — everything else keeps whatever this device
+// has. skipPaths protects fields this user has edited but not yet flushed,
+// so an in-flight local edit never gets yanked out from under them.
+function mergeRemoteChanges(local, prevRemote, nextRemote, skipPaths, prefix) {
+  if (!isPlainObject(nextRemote)) return nextRemote;
+  var out = Object.assign({}, isPlainObject(local) ? local : {});
+  Object.keys(nextRemote).forEach(function (k) {
+    var path = prefix ? prefix + "." + k : k;
+    var a = prevRemote ? prevRemote[k] : undefined;
+    var b = nextRemote[k];
+    if (isPlainObject(a) && isPlainObject(b)) {
+      out[k] = mergeRemoteChanges(out[k], a, b, skipPaths, path);
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
+      if (!pathIsSkipped(path, skipPaths)) out[k] = b;
+    }
+  });
+  return out;
+}
+
+// Live-subscribes to ONE job document. onChange receives (data,
+// hasPendingWrites). Note that hasPendingWrites means "this snapshot
+// includes SOME unacknowledged local write" — it does not mean the snapshot
+// is purely this device's own echo, so it must not be used to filter
+// snapshots out (doing so drops the other side's edits whenever they arrive
+// while a local edit is in flight). Callers should diff instead.
+function subscribeToJob(jobId, onChange, onError) {
+  return jobsCollection()
+    .doc(jobId)
+    .onSnapshot(function (doc) {
+      if (!doc.exists) return;
+      onChange(doc.data(), doc.metadata.hasPendingWrites);
+    }, onError);
+}
+
+// Writes just the changed field paths. update() (not set()) so untouched
+// fields are left exactly as they are on the server.
+function syncPatchJob(jobId, patch) {
+  return jobsCollection().doc(jobId).update(patch);
 }
 
 // Backs up the finished PDF itself to Cloud Storage on Approve — separate

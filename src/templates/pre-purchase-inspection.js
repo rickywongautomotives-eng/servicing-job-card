@@ -955,6 +955,66 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
   const [editUnlocked, setEditUnlocked] = React.useState(false);
   const locked = jobStatus === "prefilled" || (jobStatus === "completed" && !editUnlocked);
 
+  // Live two-way sync with whoever else has this card open — see
+  // useLiveJobSync in App.js. Only remotely-changed fields arrive here.
+  const applyRemoteState = React.useCallback((s) => {
+    if (s.header) setHeader(s.header);
+    if (s.keys !== undefined) setKeys(s.keys);
+    if (s.logbook) setLogbook(s.logbook);
+    if (s.ppsr) setPpsr(s.ppsr);
+    if (s.functionCheck) setFunctionCheck(s.functionCheck);
+    if (s.aboveCar) setAboveCar(s.aboveCar);
+    if (s.underCar) setUnderCar(s.underCar);
+    if (s.wheels) setWheels(s.wheels);
+    if (s.tyrePressure) setTyrePressure(s.tyrePressure);
+    if (s.tyreSize) setTyreSize(s.tyreSize);
+    if (s.notesLeft !== undefined) setNotesLeft(s.notesLeft);
+    if (s.notesRight !== undefined) setNotesRight(s.notesRight);
+    if (s.evalItems) setEvalItems(s.evalItems);
+    if (s.prices) setPrices(s.prices);
+    if (s.startedAt !== undefined) setStartedAt(s.startedAt);
+    if (s.completedAt !== undefined) setCompletedAt(s.completedAt);
+    // Diagram notes and damage marks sync, but each view's photos must keep
+    // whatever this device holds: photo image data never goes to the cloud,
+    // so the remote copy is a list of empty stubs that would blank out real
+    // photos taken here.
+    if (s.diagrams) {
+      setDiagrams((local) => {
+        const next = {};
+        Object.keys(s.diagrams).forEach((key) => {
+          next[key] = Object.assign({}, s.diagrams[key], {
+            photos: (local[key] && local[key].photos) || [],
+          });
+        });
+        return next;
+      });
+    }
+  }, []);
+
+  // Local half of autosave — see the note on the General Service version:
+  // no syncSaveJob here, since a whole-document write would clobber the
+  // other side's concurrent edits.
+  function autosaveLocally() {
+    if (!jobId) return;
+    saveJob({
+      id: jobId,
+      template: "pre-purchase-inspection",
+      status: jobStatus,
+      label: buildJobLabel(header),
+      savedAt: Date.now(),
+      state: buildSaveableState(),
+    });
+  }
+
+  const { liveError, lastRemoteEditAt } = useLiveJobSync({
+    jobId,
+    active: !!jobId,
+    userEmail: user && user.email,
+    buildState: buildSaveableState,
+    applyRemoteState,
+    persistLocal: autosaveLocally,
+  });
+
   const pageRefs = React.useRef([]);
   const photoInputRef = React.useRef(null);
   const pendingPhotoViewRef = React.useRef(null);
@@ -1247,6 +1307,17 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
       <header class="topbar no-print">
         <h1 class="app-title">Pre-Purchase Inspection</h1>
         <div class="topbar-actions">
+          ${jobId &&
+          html`
+            <span
+              class=${"live-badge" + (liveError ? " live-badge-off" : "") +
+                (!liveError && Date.now() - lastRemoteEditAt < 2500 ? " live-badge-active" : "")}
+              title=${liveError || "Changes sync both ways while this card is open"}
+            >
+              <span class="live-dot"></span>${liveError ? "Offline" : "Live"}
+            </span>
+          `}
+          ${liveError && html`<span class="export-error">${liveError}</span>`}
           ${exportError && html`<span class="export-error">${exportError}</span>`}
           <button type="button" class="btn btn-secondary" onClick=${changeTemplate}>← Templates</button>
           ${jobStatus === "prefilled"

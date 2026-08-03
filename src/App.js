@@ -21,6 +21,136 @@ function preloadPhotoUrls(urls) {
   );
 }
 
+// How long to wait after the last edit before pushing it to the cloud.
+// Short enough that the other side sees changes almost immediately, long
+// enough that a burst of typing is one write rather than thirty.
+var LIVE_SYNC_DEBOUNCE_MS = 700;
+
+// Shared by both templates: keeps one open job card in sync with whoever
+// else has it open, in both directions.
+//
+// Reads: a listener on this job's document. Incoming changes are merged in
+// field by field (see mergeRemoteChanges in sync.js), never applied as a
+// wholesale overwrite, and any field this device has edited but not yet
+// pushed is left alone so an in-flight local edit can't be yanked away.
+//
+// Writes: after LIVE_SYNC_DEBOUNCE_MS of quiet, only the field paths that
+// actually differ from what the server last told us get written.
+//
+// `buildState` and `applyRemoteState` are read through refs so the
+// subscription doesn't tear down and rebuild on every render.
+function useLiveJobSync({ jobId, active, userEmail, buildState, applyRemoteState, persistLocal }) {
+  const remoteRef = React.useRef(null); // last state the server confirmed
+  const dirtyRef = React.useRef({}); // local edits not yet pushed
+  const timerRef = React.useRef(null);
+  const [liveError, setLiveError] = React.useState("");
+  const [lastRemoteEditAt, setLastRemoteEditAt] = React.useState(0);
+
+  const buildStateRef = React.useRef(buildState);
+  buildStateRef.current = buildState;
+  const applyRef = React.useRef(applyRemoteState);
+  applyRef.current = applyRemoteState;
+  const userEmailRef = React.useRef(userEmail);
+  userEmailRef.current = userEmail;
+  const persistLocalRef = React.useRef(persistLocal);
+  persistLocalRef.current = persistLocal;
+
+  const flush = React.useCallback(() => {
+    if (!jobId || !remoteRef.current) return;
+    const current = stripPhotosForSync(buildStateRef.current());
+    const changed = collectChangedPaths(remoteRef.current, current, "state");
+    if (!Object.keys(changed).length) return;
+    // Save to this device FIRST and independently of the network. Autosave
+    // makes the card look like it's being saved continuously, so losing a
+    // tablet's connection mid-job must not mean losing the work — the local
+    // copy is what makes that promise true.
+    if (persistLocalRef.current) {
+      try {
+        persistLocalRef.current();
+      } catch (err) {
+        console.error("Local autosave failed", err);
+      }
+    }
+    // Assume the write lands; the listener corrects us if it doesn't.
+    remoteRef.current = current;
+    dirtyRef.current = {};
+    changed.updatedBy = userEmailRef.current || "";
+    syncPatchJob(jobId, changed).catch((err) => {
+      console.error("Live sync write failed", err);
+      setLiveError("Not syncing — changes are saved on this device only.");
+    });
+  }, [jobId]);
+
+  React.useEffect(() => {
+    if (!jobId || !active) return undefined;
+    const unsubscribe = subscribeToJob(
+      jobId,
+      (data) => {
+        // Every snapshot is processed, including ones Firestore flags as
+        // having pending local writes. That flag means "this snapshot
+        // contains some unacknowledged local write" — NOT "this is only my
+        // own echo" — so skipping those silently dropped the other side's
+        // edits whenever they landed while this device had an edit in
+        // flight. Safety comes from the diff instead: our own echo produces
+        // no changes against remoteRef, and genuinely concurrent edits are
+        // protected field-by-field by dirtyRef.
+        const incoming = data.state || {};
+        const previous = remoteRef.current;
+        if (!previous) {
+          // First snapshot: adopt the cloud copy wholesale. The card may
+          // have been opened from a stale localStorage copy (the picker
+          // seeds from local storage before its cloud listener answers), and
+          // merely baselining here would make those stale values look like
+          // fresh local edits — which then get pushed over newer data the
+          // other side had already saved. Nothing has been typed yet at this
+          // point, so there is no local work to protect.
+          remoteRef.current = incoming;
+          applyRef.current(mergeRemoteChanges(buildStateRef.current(), {}, incoming, null));
+          return;
+        }
+        const merged = mergeRemoteChanges(
+          buildStateRef.current(),
+          previous,
+          incoming,
+          dirtyRef.current
+        );
+        remoteRef.current = incoming;
+        setLiveError("");
+        applyRef.current(merged);
+        setLastRemoteEditAt(Date.now());
+      },
+      (err) => {
+        console.error("Live sync listener failed", err);
+        setLiveError("Not syncing — changes are saved on this device only.");
+      }
+    );
+    return unsubscribe;
+  }, [jobId, active]);
+
+  // Runs after every render (no dep array on purpose): recomputing the diff
+  // against the server copy is what identifies "locally dirty" fields, and
+  // that has to stay current with whatever was just typed.
+  React.useEffect(() => {
+    if (!jobId || !active || !remoteRef.current) return undefined;
+    const current = stripPhotosForSync(buildStateRef.current());
+    dirtyRef.current = collectChangedPaths(remoteRef.current, current, "state");
+    if (!Object.keys(dirtyRef.current).length) return undefined;
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(flush, LIVE_SYNC_DEBOUNCE_MS);
+    return () => clearTimeout(timerRef.current);
+  });
+
+  // Don't strand the last few keystrokes if the card is closed mid-edit.
+  React.useEffect(() => {
+    return () => {
+      clearTimeout(timerRef.current);
+      if (jobId && active) flush();
+    };
+  }, [jobId, active, flush]);
+
+  return { liveError, lastRemoteEditAt };
+}
+
 // Shared by every template that captures photos: downscales to
 // PHOTO_MAX_DIMENSION on the longest side and re-encodes as JPEG so exported
 // PDFs stay a reasonable size.
@@ -105,13 +235,31 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
   const [toolbarPos, setToolbarPos] = React.useState(null);
   const toolbarRef = React.useRef(null);
 
-  React.useEffect(() => {
+  // Live sync means `value` can now change because the OTHER person edited
+  // this field. Rewriting innerHTML while this field has focus would drop
+  // the caret back to position 0 mid-sentence, so hold the incoming value
+  // and apply it once focus leaves.
+  const pendingRemoteRef = React.useRef(null);
+
+  const applyValueToDom = React.useCallback((next) => {
     if (!elRef.current) return;
-    if (value !== lastReportedRef.current) {
-      elRef.current.innerHTML = value || "";
-      lastReportedRef.current = value;
+    if (next === lastReportedRef.current) return;
+    if (document.activeElement === elRef.current) {
+      pendingRemoteRef.current = next;
+      return;
     }
-  }, [value]);
+    elRef.current.innerHTML = next || "";
+    lastReportedRef.current = next;
+    pendingRemoteRef.current = null;
+  }, []);
+
+  React.useEffect(() => {
+    applyValueToDom(value);
+  }, [value, applyValueToDom]);
+
+  function handleBlur() {
+    if (pendingRemoteRef.current !== null) applyValueToDom(pendingRemoteRef.current);
+  }
 
   // Primary hide mechanism: tapping/clicking anywhere outside this field AND
   // outside the toolbar itself closes it. Listens on pointerdown (fires
@@ -184,6 +332,7 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
         contentEditable=${!disabled}
         data-placeholder=${placeholder || ""}
         onInput=${report}
+        onBlur=${handleBlur}
         onKeyDown=${handleKeyDown}
         onMouseUp=${updateToolbar}
         onKeyUp=${updateToolbar}
@@ -607,10 +756,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // the office's editable "watch" copy — same app, same permissions model,
   // just flagged so office edits render red/bold and tech-only controls
   // (physical checks/measurements) are disabled for that session.
+  // Which side you are is decided by the account you're signed in with, not
+  // by opening a special link — the owner is the office, anyone else is a
+  // technician. You just open the card from the list like any other. The
+  // ?role= override is kept only so both sides can be opened from a single
+  // account for testing.
   const role = React.useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("role") === "office" ? "office" : "tech";
-  }, []);
+    const override = params.get("role");
+    if (override === "office" || override === "tech") return override;
+    return user && user.email === OWNER_EMAIL ? "office" : "tech";
+  }, [user]);
   const isOffice = role === "office";
   const [cardCode, setCardCode] = React.useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -899,12 +1055,57 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     onChangeTemplate();
   }
 
-  function copyOfficeLink() {
-    const url = new URL(window.location.href);
-    url.searchParams.set("card", cardCode);
-    url.searchParams.set("role", "office");
-    navigator.clipboard.writeText(url.toString());
+  // Pushes whatever the other side just changed into this card's state.
+  // Only fields that actually changed remotely reach here (the merge happens
+  // in useLiveJobSync), so assigning each slice wholesale is safe.
+  // photos/cardCode are deliberately skipped: photo image data never goes to
+  // the cloud, and the card code is this card's identity, not content.
+  const applyRemoteState = React.useCallback((s) => {
+    if (s.header) setHeader(s.header);
+    if (s.headerBy) setHeaderBy(s.headerBy);
+    if (s.oilSpec) setOilSpec(s.oilSpec);
+    if (s.oilSpecBy) setOilSpecBy(s.oilSpecBy);
+    if (s.fluids) setFluids(s.fluids);
+    if (s.preService) setPreService(s.preService);
+    if (s.officeNotes !== undefined) setOfficeNotes(s.officeNotes);
+    if (s.officeNotesBy !== undefined) setOfficeNotesBy(s.officeNotesBy);
+    if (s.aboveCar) setAboveCar(s.aboveCar);
+    if (s.underCar) setUnderCar(s.underCar);
+    if (s.underCarBy) setUnderCarBy(s.underCarBy);
+    if (s.wheels) setWheels(s.wheels);
+    if (s.tyrePressure) setTyrePressure(s.tyrePressure);
+    if (s.tyreSize) setTyreSize(s.tyreSize);
+    if (s.notes2Left !== undefined) setNotes2Left(s.notes2Left);
+    if (s.notes2LeftBy !== undefined) setNotes2LeftBy(s.notes2LeftBy);
+    if (s.notes2Right !== undefined) setNotes2Right(s.notes2Right);
+    if (s.notes2RightBy !== undefined) setNotes2RightBy(s.notes2RightBy);
+    if (s.startedAt !== undefined) setStartedAt(s.startedAt);
+    if (s.completedAt !== undefined) setCompletedAt(s.completedAt);
+  }, []);
+
+  // Local half of autosave. Deliberately does NOT call syncSaveJob — that
+  // writes the whole document and would undo the other side's concurrent
+  // edits, which is exactly what the per-field patching exists to avoid.
+  function autosaveLocally() {
+    if (!jobId) return;
+    saveJob({
+      id: jobId,
+      template: "general-service",
+      status: jobStatus,
+      label: buildJobLabel(header),
+      savedAt: Date.now(),
+      state: buildSaveableState(),
+    });
   }
+
+  const { liveError, lastRemoteEditAt } = useLiveJobSync({
+    jobId,
+    active: !!jobId,
+    userEmail: user && user.email,
+    buildState: buildSaveableState,
+    applyRemoteState,
+    persistLocal: autosaveLocally,
+  });
 
   return html`
     <div class="app">
@@ -915,12 +1116,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             ${isOffice ? "Office view" : "Technician"}
           </span>
           <span class="card-code">Card: ${cardCode}</span>
-          ${!isOffice &&
+          ${jobId &&
           html`
-            <button type="button" class="btn btn-secondary" onClick=${copyOfficeLink}>
-              Copy office link
-            </button>
+            <span
+              class=${"live-badge" + (liveError ? " live-badge-off" : "") +
+                (!liveError && Date.now() - lastRemoteEditAt < 2500 ? " live-badge-active" : "")}
+              title=${liveError || "Changes sync both ways while this card is open"}
+            >
+              <span class="live-dot"></span>${liveError ? "Offline" : "Live"}
+            </span>
           `}
+          ${liveError && html`<span class="export-error">${liveError}</span>`}
           ${exportError && html`<span class="export-error">${exportError}</span>`}
           <button type="button" class="btn btn-secondary" onClick=${changeTemplate}>
             ← Templates
