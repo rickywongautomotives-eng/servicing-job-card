@@ -954,7 +954,12 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
   const [completedAt, setCompletedAt] = React.useState(() => seed("completedAt", null));
   const isOwner = !!(user && user.email === OWNER_EMAIL);
   const [editUnlocked, setEditUnlocked] = React.useState(false);
-  const locked = jobStatus === "prefilled" || (jobStatus === "completed" && !editUnlocked);
+  // See the note on the General Service version: technicians must press
+  // Start Job first so the start time means something; the office can edit a
+  // not-yet-started card directly.
+  const locked =
+    (jobStatus === "prefilled" && !isOwner) ||
+    (jobStatus === "completed" && !editUnlocked);
 
   // Live two-way sync with whoever else has this card open — see
   // useLiveJobSync in App.js. Only remotely-changed fields arrive here.
@@ -1323,6 +1328,8 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
           <button type="button" class="btn btn-secondary" onClick=${changeTemplate}>← Templates</button>
           ${jobStatus === "prefilled"
             ? html`
+                ${isOwner &&
+                html`<button type="button" class="btn btn-secondary" onClick=${saveProgress}>Save Progress</button>`}
                 <button type="button" class="btn btn-primary" onClick=${startJob}>Start Job</button>
               `
             : html`

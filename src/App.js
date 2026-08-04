@@ -829,7 +829,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // always opens locked by default.
   const isOwner = !!(user && user.email === OWNER_EMAIL);
   const [editUnlocked, setEditUnlocked] = React.useState(false);
-  const locked = jobStatus === "prefilled" || (jobStatus === "completed" && !editUnlocked);
 
   const page1Ref = React.useRef(null);
   const page2Ref = React.useRef(null);
@@ -853,6 +852,22 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     return user && user.email === OWNER_EMAIL ? "office" : "tech";
   }, [user]);
   const isOffice = role === "office";
+
+  // Declared here, AFTER isOffice — it reads it. Sitting with the other lock
+  // state further up put it in the temporal dead zone and threw
+  // "Cannot access 'isOffice' before initialization", which blanked every
+  // General Service card.
+  //
+  // A not-yet-started card stays read-only for technicians: pressing Start
+  // Job is what begins the job and stamps the start time, so letting them
+  // type into it first would make that timestamp meaningless. The office is
+  // exempt — correcting a booking before the tech picks it up is exactly
+  // when it needs editing. Completed cards stay locked for everyone until
+  // the owner deliberately presses Edit.
+  const locked =
+    (jobStatus === "prefilled" && !isOffice) ||
+    (jobStatus === "completed" && !editUnlocked);
+
   const [cardCode, setCardCode] = React.useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("card") || seed("cardCode", generateCardCode());
@@ -1224,6 +1239,12 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           </button>
           ${jobStatus === "prefilled"
             ? html`
+                ${isOffice &&
+                html`
+                  <button type="button" class="btn btn-secondary" onClick=${saveProgress}>
+                    Save Progress
+                  </button>
+                `}
                 <button type="button" class="btn btn-primary" onClick=${startJob}>
                   Start Job
                 </button>
