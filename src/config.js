@@ -346,6 +346,16 @@ var SECTION_DEFS = [
     },
   },
   {
+    id: "quote",
+    label: "Quote",
+    default: false,
+    hasContent: function (s) {
+      return ((s.quote || {}).items || []).some(function (r) {
+        return (r.desc || "").trim() || (r.sell || "").trim() || (r.cost || "").trim();
+      });
+    },
+  },
+  {
     id: "aboveCar",
     label: "Above Car",
     default: true,
@@ -506,8 +516,26 @@ function buildInitialState() {
     tyreSize: tyreSize,
     sections: buildDefaultSections(),
     diagnostics: buildInitialDiagnostics(),
+    quote: buildInitialQuote(),
   };
 }
+
+// The quote is drafted from the card and sent to the customer by SMS; the
+// customer approves by replying. Approval deliberately stays off the card —
+// no customer login, no approve button, no portal.
+//
+// Each line carries what the customer is charged and what it cost us,
+// matching how Ricky already writes quotes ("Radiator 230/131.91"), and the
+// margin is shown. He asked for it explicitly, knowing he reads the card in
+// front of the customer at pickup: "just do it.. if its too obvious then ill
+// remove it later" — so keep it easy to hide (the .quote-margin class alone).
+function buildInitialQuote() {
+  return {
+    items: buildBlankRows(QUOTE_ROWS, { desc: "", sell: "", cost: "" }),
+  };
+}
+
+var QUOTE_ROWS = 6;
 
 // Diagnostics is a written record, not a checklist — you cannot pre-list what
 // you are looking for until you have looked. The structure comes from the

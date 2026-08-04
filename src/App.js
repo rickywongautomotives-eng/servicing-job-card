@@ -840,6 +840,163 @@ function SectionAdder({ sections, onToggle, hiddenWithContent, exportMode }) {
 // Findings, because the quote is written off the cause. Watching a real job
 // go through: the tech recorded "radiator cracked" and, separately, a brief
 // summary of what could have caused it; the office quoted from the second.
+// Strips the rich-text markup out of a notes field so it can go into a plain
+// SMS. <br> becomes a newline first, or every line runs together.
+function notesToPlainText(value) {
+  if (!value) return "";
+  return String(value)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function quoteTotals(items) {
+  let sell = 0;
+  let cost = 0;
+  items.forEach((r) => {
+    const s = parseFloat(String(r.sell).replace(/[^0-9.\-]/g, ""));
+    const c = parseFloat(String(r.cost).replace(/[^0-9.\-]/g, ""));
+    if (!isNaN(s)) sell += s;
+    if (!isNaN(c)) cost += c;
+  });
+  return { sell, cost, margin: sell - cost };
+}
+
+function money(n) {
+  return "$" + (Math.round(n * 100) / 100).toLocaleString();
+}
+
+// Builds the message that gets sent to the customer. Modelled on the real
+// SMS for the 1UQ3XT Subaru: greeting, what was found in plain English, the
+// itemised quote, then a sign-off. Only the parts that can be derived from
+// the card are filled in — the explanation is whatever the technician wrote
+// under Recommendation, not invented here.
+//
+// Cost and margin are deliberately absent: this text goes to the customer.
+function buildQuoteMessage({ header, diagnostics, quote }) {
+  const name = (header.customer || "").trim().split(/\s+/)[0];
+  const vehicle = [header.make, header.model].filter(Boolean).join(" ").trim();
+  const totals = quoteTotals(quote.items);
+  const lines = [];
+
+  lines.push("Hi" + (name ? " " + name : "") + ",");
+  lines.push("");
+  lines.push(
+    "We've had a look at your " + (vehicle || "vehicle") + (header.registration ? " (" + header.registration + ")" : "") + "."
+  );
+
+  const cause = notesToPlainText(diagnostics.cause);
+  if (cause) lines.push(cause);
+  const rec = notesToPlainText(diagnostics.recommendation);
+  if (rec) {
+    lines.push("");
+    lines.push(rec);
+  }
+
+  const rows = quote.items.filter((r) => (r.desc || "").trim() || (r.sell || "").trim());
+  if (rows.length) {
+    lines.push("");
+    lines.push("Quote:");
+    rows.forEach((r) => {
+      const s = parseFloat(String(r.sell).replace(/[^0-9.\-]/g, ""));
+      lines.push((r.desc || "").trim() + (isNaN(s) ? "" : ": " + money(s)));
+    });
+    lines.push("Total: " + money(totals.sell));
+  }
+
+  lines.push("");
+  lines.push("Just reply here or give me a call if you have any questions.");
+  lines.push("");
+  lines.push("Regards");
+  lines.push("Ricky");
+  return lines.join("\n");
+}
+
+function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle, disabled, exportMode }) {
+  const [copied, setCopied] = React.useState(false);
+  const totals = quoteTotals(quote.items);
+
+  function setRow(index, field, value) {
+    onChange({
+      items: quote.items.map((r, i) => (i === index ? Object.assign({}, r, { [field]: value }) : r)),
+    });
+  }
+
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(buildQuoteMessage({ header, diagnostics, quote }));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  return html`
+    <${SectionTitle}
+      label="Quote"
+      sectionId="quote"
+      sections=${sections}
+      onToggle=${onToggle}
+      exportMode=${exportMode}
+    />
+    <table class="quote-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th class="quote-num">Charge</th>
+          <th class="quote-num quote-margin">Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${quote.items.map(
+          (row, i) => html`
+            <tr key=${i}>
+              <td>
+                <input type="text" value=${row.desc} disabled=${disabled}
+                  onChange=${(e) => setRow(i, "desc", e.target.value)} />
+              </td>
+              <td class="quote-num">
+                <input type="text" value=${row.sell} disabled=${disabled}
+                  onChange=${(e) => setRow(i, "sell", e.target.value)} />
+              </td>
+              <td class="quote-num quote-margin">
+                <input type="text" value=${row.cost} disabled=${disabled}
+                  onChange=${(e) => setRow(i, "cost", e.target.value)} />
+              </td>
+            </tr>
+          `
+        )}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="quote-total-label">Total</td>
+          <td class="quote-num quote-total">${money(totals.sell)}</td>
+          <td class="quote-num quote-margin quote-total">
+            ${money(totals.cost)} <span class="quote-margin-figure">(${money(totals.margin)})</span>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+    ${!exportMode &&
+    html`
+      <div class="quote-actions no-print">
+        <button type="button" class="btn btn-secondary" onClick=${copyMessage}>
+          ${copied ? "Copied ✓" : "Copy message for customer"}
+        </button>
+        <span class="quote-hint">
+          Builds the SMS from Probable cause, Recommendation and the charges above. Cost and margin are left out.
+        </span>
+      </div>
+    `}
+  `;
+}
+
 function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, exportMode }) {
   function setRow(listKey, index, field, value) {
     const rows = data[listKey].map((r, i) => (i === index ? Object.assign({}, r, { [field]: value }) : r));
@@ -992,6 +1149,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   const [preService, setPreService] = React.useState(() => seed("preService", initial.preService));
   const [sections, setSections] = React.useState(() => seed("sections", initial.sections));
   const [diagnostics, setDiagnostics] = React.useState(() => seed("diagnostics", initial.diagnostics));
+  const [quote, setQuote] = React.useState(() => seed("quote", initial.quote));
   const [officeNotes, setOfficeNotes] = React.useState(() => seed("officeNotes", NOTES_BLANK_VALUE));
   const [officeNotesBy, setOfficeNotesBy] = React.useState(() => seed("officeNotesBy", ""));
   const [aboveCar, setAboveCar] = React.useState(() => seed("aboveCar", initial.aboveCar));
@@ -1102,8 +1260,16 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // a service that the customer also wants looked at, or the reverse): page 1
   // is already full, so diagnostics takes a sheet of its own. Measured:
   // forcing both onto page 1 gives 1486px against a 1123px budget.
-  const diagOnOwnPage = sections.diagnostics && (sections.fluids || sections.preService);
-  const diagOnPage1 = sections.diagnostics && !diagOnOwnPage;
+  // Page 1 only has room for diagnostics or the quote once the two big
+  // service blocks are switched off. Even then it still carries the header,
+  // the oil bar, the logbook panel and the 248px notes box, so it fits ONE of
+  // them, not both: diagnostics + quote + fault codes measured 1380px against
+  // the 1123px budget. Whatever doesn't fit goes to a sheet of its own.
+  const page1HasRoom = !sections.fluids && !sections.preService;
+  const diagOnPage1 = sections.diagnostics && page1HasRoom;
+  const quoteOnPage1 = sections.quote && page1HasRoom && !sections.diagnostics;
+  const extrasPageUsed =
+    (sections.diagnostics && !diagOnPage1) || (sections.quote && !quoteOnPage1);
 
   const updateHeader = (key, value) => {
     setHeader((prev) => ({ ...prev, [key]: value }));
@@ -1240,6 +1406,10 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     setDiagnostics((prev) => Object.assign({}, prev, { [key]: value }));
   }
 
+  function updateQuote(patch) {
+    setQuote((prev) => Object.assign({}, prev, patch));
+  }
+
   function toggleSection(id) {
     const def = SECTION_DEFS.find((d) => d.id === id);
     const turningOff = sections[id];
@@ -1261,12 +1431,12 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   const hiddenWithContent = React.useMemo(() => {
     const s = buildSaveableState();
     return SECTION_DEFS.filter((d) => !sections[d.id] && d.hasContent(s)).map((d) => d.id);
-  }, [sections, fluids, preService, aboveCar, underCar, wheels, tyrePressure, tyreSize, diagnostics]);
+  }, [sections, fluids, preService, aboveCar, underCar, wheels, tyrePressure, tyreSize, diagnostics, quote]);
 
   function buildSaveableState() {
     return {
       header, headerBy, oilSpec, oilSpecBy, fluids, preService,
-      sections, diagnostics,
+      sections, diagnostics, quote,
       officeNotes, officeNotesBy, aboveCar, underCar, underCarBy,
       wheels, tyrePressure, tyreSize,
       notes2Left, notes2LeftBy, notes2Right, notes2RightBy,
@@ -1440,6 +1610,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     // diagnostics section on makes it appear on the tech's tablet.
     if (s.sections) setSections(s.sections);
     if (s.diagnostics) setDiagnostics(s.diagnostics);
+    if (s.quote) setQuote(s.quote);
     if (s.officeNotes !== undefined) setOfficeNotes(s.officeNotes);
     if (s.officeNotesBy !== undefined) setOfficeNotesBy(s.officeNotesBy);
     if (s.aboveCar) setAboveCar(s.aboveCar);
@@ -1748,6 +1919,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             disabled=${locked}
             exportMode=${exportMode}
           />`}
+          ${quoteOnPage1 &&
+          html`<${QuoteSection}
+            quote=${quote}
+            header=${header}
+            diagnostics=${diagnostics}
+            sections=${sections}
+            onChange=${updateQuote}
+            onToggle=${toggleSection}
+            disabled=${locked}
+            exportMode=${exportMode}
+          />`}
 
           <div class="section-title">Notes (office use only)</div>
           <div class="notes-lined-wrap">
@@ -1765,18 +1947,32 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           </div>
         </section>
 
-        ${diagOnOwnPage &&
+        ${extrasPageUsed &&
         html`
         <section class="page" id="pagediag" ref=${diagPageRef}>
-          <div class="page-label">Diagnostics</div>
-          <${DiagnosticsSection}
+          <div class="page-label">${sections.diagnostics && !diagOnPage1 ? "Diagnostics" : "Quote"}</div>
+          ${sections.diagnostics &&
+          !diagOnPage1 &&
+          html`<${DiagnosticsSection}
             data=${diagnostics}
             sections=${sections}
             onChange=${updateDiagnostics}
             onToggle=${toggleSection}
             disabled=${locked}
             exportMode=${exportMode}
-          />
+          />`}
+          ${sections.quote &&
+          !quoteOnPage1 &&
+          html`<${QuoteSection}
+            quote=${quote}
+            header=${header}
+            diagnostics=${diagnostics}
+            sections=${sections}
+            onChange=${updateQuote}
+            onToggle=${toggleSection}
+            disabled=${locked}
+            exportMode=${exportMode}
+          />`}
         </section>
         `}
 

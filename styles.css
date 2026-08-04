@@ -1321,6 +1321,69 @@ input.office-written[type="checkbox"] {
 .diag-codes td:first-child { width: 18%; }
 .diag-codes td:last-child { width: 20%; }
 
+/* ---------- Quote ---------- */
+
+.quote-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.quote-table th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--line-strong);
+  text-align: left;
+  padding: 1px 4px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.quote-table td {
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.quote-table input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  padding: 3px 4px;
+}
+
+.quote-table input:focus {
+  outline: none;
+  background: var(--panel);
+}
+
+.quote-num { width: 16%; text-align: right; }
+.quote-num input { text-align: right; }
+
+.quote-total-label,
+.quote-total {
+  font-weight: 700;
+  padding: 3px 4px;
+  border-top: 2px solid var(--ink);
+}
+
+.quote-margin-figure { color: var(--line-strong); font-weight: 600; }
+
+.quote-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.quote-hint {
+  font-size: 11px;
+  color: var(--line-strong);
+}
+
 .notes-lines {
   position: absolute;
   inset: 0;
