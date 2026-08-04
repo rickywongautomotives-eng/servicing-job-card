@@ -161,6 +161,10 @@ const BOILERPLATE_PATTERNS = [
   /^service\s*:/i,
   /^customer requested\b/i,
   /^last synced\b/i,
+  // Office-side chatter that lives inside "Internal notes". The section as a
+  // whole used to be dropped for this line's sake; it isn't any more (see
+  // parseServiceDescription), so the noise is denied individually instead.
+  /^courtesy car\b/i,
 ];
 
 function isBoilerplate(line) {
@@ -217,25 +221,31 @@ function parseServiceDescription(description) {
   // never matched against the current fluids/filters checklist, even if a
   // line inside it happens to look like "Air filter A1891".
   let inNotesSection = false;
-  let inInternalNotes = false;
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
 
-    // "Internal notes" is office-side chatter and is dropped in full,
-    // heading and contents (the owner's explicit call). It runs until the
-    // next recognisable section begins.
+    // "Internal notes" CONTENT IS KEPT. It was dropped in full until
+    // 2026-08-04, on the strength of one example ("Courtesy car") that made
+    // it look like office-side chatter. It isn't: it is where the office
+    // types the customer's reported concern, and on a diagnostics job that is
+    // the single most important thing the technician needs -- e.g. the
+    // 1UQ3XT Subaru's "Tow in, car overheated with steam coming out of
+    // bonnet. Friday night saw steam from the bonnet, didn't drive after."
+    // Dropping the section deleted exactly that. It also carries plain
+    // faults like "Horn not working" and "Indicator light RHR intermittent".
+    //
+    // Only the heading itself is dropped (it labels nothing the technician
+    // needs), and known chatter is denied line-by-line via
+    // BOILERPLATE_PATTERNS -- the same keep-by-default rule used everywhere
+    // else in this parser.
     if (/^internal notes\b/i.test(line)) {
-      inNotesSection = true; // also stops fluids matching from here on
-      inInternalNotes = true;
+      // Stops fluids matching from here on, exactly as before: internal
+      // notes routinely repeat the oil spec ("Service 10w40 4.4/436") and
+      // list work already in the main job list, which would otherwise
+      // overwrite the real spec or tick items twice.
+      inNotesSection = true;
       continue;
-    }
-    if (inInternalNotes) {
-      if (/^(history flags|workshop software)\b/i.test(line) || isBoilerplate(line)) {
-        inInternalNotes = false;
-      } else {
-        continue;
-      }
     }
 
     if (isBoilerplate(line)) continue;
@@ -253,7 +263,12 @@ function parseServiceDescription(description) {
     if (!inNotesSection) {
       const serviceMatch = line.match(/^service\s+(.+)$/i);
       if (serviceMatch) {
-        const value = serviceMatch[1].trim();
+        // Trailing "300/90" is Ricky's sell/cost pricing, not part of the oil
+        // spec -- and because the grade/filter split takes the LAST slash, a
+        // priced line was reading the filter as the cost. The Prado's
+        // "Service 0W-30 ENVIRO+ C2 7.5L/Z418       300/90" came out as
+        // filter "90" instead of "Z418". Strip the price first.
+        const value = serviceMatch[1].replace(/\s+\d+(?:\.\d+)?\/\d+(?:\.\d+)?\s*$/, "").trim();
         const lastSlash = value.lastIndexOf("/");
         if (lastSlash !== -1) {
           oilGrade = value.slice(0, lastSlash).trim();
