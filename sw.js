@@ -1,6 +1,6 @@
 ﻿// Bump this whenever any cached file changes, so tablets pick up the update
 // next time they have a connection (old caches are dropped on activate).
-var CACHE_NAME = "job-card-v75";
+var CACHE_NAME = "job-card-v76";
 
 var APP_SHELL = [
   "./",

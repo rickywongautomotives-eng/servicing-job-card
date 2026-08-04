@@ -34,6 +34,20 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // Permanent index of approved jobs (rego, customer, date, odometer, and
+    // where the PDF was archived). A job document is deleted on Approve, so
+    // this is the only surviving link between an archived PDF and the car it
+    // belongs to — it is what a future "show this vehicle's previous service"
+    // feature will search.
+    //
+    // Deliberately NOT deletable: create and update are allowed so a retried
+    // Approve can rewrite its own row, but nothing in the app should ever be
+    // able to erase service history. Removing a row is a console job.
+    match /history/{jobId} {
+      allow read, create, update: if isStaff();
+      allow delete: if false;
+    }
+
     // Anything not explicitly matched above stays denied by default.
   }
 }

@@ -1145,7 +1145,12 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     if (jobId) {
       setExporting(true);
       try {
-        await uploadJobPdf(jobId, blob);
+        const pdfUrl = await uploadJobPdf(jobId, blob);
+        // Written BEFORE the job is deleted — this is the only thing that
+        // will still say which car and customer the archived PDF belongs to.
+        await saveJobHistory(
+          buildHistoryRecord(jobId, "general-service", header, pdfUrl, user && user.email)
+        );
       } catch (err) {
         console.error(err);
         setExportError(

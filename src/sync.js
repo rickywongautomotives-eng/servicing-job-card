@@ -198,3 +198,46 @@ function uploadJobPdf(jobId, blob) {
     return ref.getDownloadURL();
   });
 }
+
+// Permanent record of an approved job, written on Approve just before the
+// job document itself is deleted.
+//
+// Why this exists: Approve uploads the PDF to job-pdfs/<jobId>.pdf and then
+// deletes the job from Firestore. jobId is a Date.now()+random string, so
+// without this record NOTHING says which vehicle, customer, date or odometer
+// reading that PDF belongs to — the archive becomes unsearchable the moment
+// the job is cleared. This is the index that makes "attach customer A's last
+// service to today's card" possible later; it is deliberately being written
+// from today onwards even though nothing reads it yet, because history that
+// wasn't captured at the time cannot be reconstructed afterwards.
+//
+// Keyed by jobId (not auto-id) so retrying a failed Approve overwrites the
+// same row instead of leaving a duplicate behind.
+function saveJobHistory(record) {
+  return firebase
+    .firestore()
+    .collection("history")
+    .doc(record.jobId)
+    .set(record);
+}
+
+// Pulls the plain header fields worth indexing off a card's header state.
+// Registration is the lookup key in practice — it is the one field that
+// identifies the car regardless of who booked it or how the name was typed.
+function buildHistoryRecord(jobId, template, header, pdfUrl, userEmail) {
+  header = header || {};
+  return {
+    jobId: jobId,
+    template: template || "",
+    registration: (header.registration || "").trim().toUpperCase(),
+    customer: header.customer || "",
+    make: header.make || "",
+    model: header.model || "",
+    date: header.date || "",
+    kilometers: header.kilometers || "",
+    pdfPath: "job-pdfs/" + jobId + ".pdf",
+    pdfUrl: pdfUrl || "",
+    approvedBy: userEmail || "",
+    approvedAt: new Date().toISOString()
+  };
+}
