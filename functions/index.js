@@ -165,6 +165,21 @@ const BOILERPLATE_PATTERNS = [
   // whole used to be dropped for this line's sake; it isn't any more (see
   // parseServiceDescription), so the noise is denied individually instead.
   /^courtesy car\b/i,
+  // Quote arithmetic drafted into the booking. Ricky writes the customer's
+  // quote in the calendar event before sending it, in the form
+  // "Radiator (Koyo): $230" / "Labour: $350" / "Total: $630". None of it
+  // belongs on the job card -- and it actively did harm: "Coolant: $50"
+  // matched the Coolant fluids pattern and ticked that row with "$50" as its
+  // value, and the rest ate three of the ten office-notes lines.
+  //
+  // Deliberately narrow. Only the "<label>: $<number>" form and standalone
+  // total/discount arithmetic are denied. Real work lines carry their price
+  // as a trailing sell/cost with no colon and no dollar sign ("Fuel filter
+  // Z977  340/108 napa ryco"), and must keep coming through -- as must the
+  // diagnostic time log ("Labour 1.25hours"), which is billable evidence.
+  /^[^:]{1,40}:\s*\$\s*\d/,
+  /^total\b/i,
+  /^discount\b/i,
 ];
 
 function isBoilerplate(line) {

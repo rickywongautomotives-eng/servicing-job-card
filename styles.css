@@ -594,6 +594,110 @@ input.office-written[type="checkbox"] {
   margin: 9px 0 4px;
 }
 
+/* The heading holds its label on the left and the remove control on the
+   right. display:flex rather than block so the button can sit on the rule
+   without a second line — page 1 has no spare vertical space. */
+.section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-toggle {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--line-strong);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.section-toggle:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--panel);
+}
+
+/* Sits with the Logbook / Engine Light checks, which is where the decision
+   actually gets made — those two are what tell you the car is in for a fault
+   rather than a service. */
+.diag-toggle {
+  align-self: center;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--line-strong);
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.diag-toggle.is-on {
+  color: #fff;
+  background: var(--ink);
+  border-style: solid;
+  border-color: var(--ink);
+}
+
+/* Strip of everything currently switched off, so a removed section is always
+   one tap from coming back and is never silently forgotten. */
+.section-adder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 0 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.section-adder-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--line-strong);
+}
+
+.section-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.section-add-btn:hover {
+  border-color: var(--ink);
+}
+
+/* A section can be switched off while still holding entries — hiding never
+   deletes. That content will not appear on the printed card, so it is called
+   out here rather than left silent. */
+.section-add-flag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--danger, #c0271d);
+}
+
 .section-title .hint {
   text-transform: none;
   font-weight: 500;
@@ -1118,6 +1222,104 @@ input.office-written[type="checkbox"] {
   border: none;
   padding: 6px 8px 0;
 }
+
+/* ---------- Diagnostics ---------- */
+
+/* Findings on the left taking the bulk of the width, the three short blocks
+   stacked on the right. The whole thing flexes so it absorbs whatever height
+   the switched-off service sections freed up. */
+.diag-block {
+  display: flex;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.diag-findings {
+  flex: 1 1 58%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.diag-side {
+  flex: 1 1 42%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.diag-sub {
+  display: flex;
+  flex-direction: column;
+}
+
+.diag-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--line-strong);
+  margin-bottom: 2px;
+}
+
+/* Overrides the fixed 248px of a normal notes box: this one grows into the
+   space freed by whatever is switched off, which is the whole reason the
+   findings box is the one that expands. */
+.notes-lined-wrap.diag-findings-wrap {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 120px;
+}
+
+.notes-lined-wrap.diag-short-wrap {
+  height: 76px;
+}
+
+.diag-time,
+.diag-codes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.diag-time th,
+.diag-codes th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--line-strong);
+  text-align: left;
+  padding: 1px 4px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.diag-time td,
+.diag-codes td {
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.diag-time input,
+.diag-codes input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  padding: 2px 4px;
+}
+
+.diag-time input:focus,
+.diag-codes input:focus {
+  outline: none;
+  background: var(--panel);
+}
+
+.diag-time td:first-child { width: 26%; }
+.diag-time td:nth-child(2) { width: 18%; }
+.diag-codes td:first-child { width: 18%; }
+.diag-codes td:last-child { width: 20%; }
 
 .notes-lines {
   position: absolute;

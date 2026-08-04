@@ -783,6 +783,199 @@ function ConditionCheckRow({ item, entry, onStatus, onNote, disabled, toggleDisa
   `;
 }
 
+// A section heading with the control that switches its section off. Shared,
+// so every template gets the same affordance in the same place.
+//
+// The button is hidden in exportMode rather than marked .no-print:
+// html2canvas ignores .no-print entirely, so anything that must stay off the
+// printed card has to not be rendered at all.
+function SectionTitle({ label, hint, sectionId, sections, onToggle, exportMode }) {
+  const on = sections[sectionId];
+  return html`
+    <div class="section-title">
+      <span>${label}${hint ? html` <span class="hint">${hint}</span>` : null}</span>
+      ${!exportMode &&
+      html`
+        <button
+          type="button"
+          class="section-toggle"
+          title=${on ? "Remove this section from the card" : "Add this section to the card"}
+          aria-label=${(on ? "Remove " : "Add ") + label}
+          onClick=${() => onToggle(sectionId)}
+        >
+          ${on ? "−" : "+"}
+        </button>
+      `}
+    </div>
+  `;
+}
+
+// The strip of "+ Section" buttons for everything currently switched off, so
+// a removed section is always one tap from coming back. Never printed.
+function SectionAdder({ sections, onToggle, hiddenWithContent, exportMode }) {
+  if (exportMode) return null;
+  const off = SECTION_DEFS.filter((d) => !sections[d.id]);
+  if (!off.length) return null;
+  return html`
+    <div class="section-adder no-print">
+      <span class="section-adder-label">Add:</span>
+      ${off.map(
+        (d) => html`
+          <button type="button" class="section-add-btn" key=${d.id} onClick=${() => onToggle(d.id)}>
+            + ${d.label}
+            ${hiddenWithContent.includes(d.id) && html`<span class="section-add-flag">has entries</span>`}
+          </button>
+        `
+      )}
+    </div>
+  `;
+}
+
+// The diagnostics record. Findings is the box that grows into whatever space
+// the switched-off service sections freed up — on a towed-in car with no
+// service work that is most of the page, which is the point: a diagnosis is
+// mostly writing.
+//
+// Probable cause is deliberately its own box rather than the tail of
+// Findings, because the quote is written off the cause. Watching a real job
+// go through: the tech recorded "radiator cracked" and, separately, a brief
+// summary of what could have caused it; the office quoted from the second.
+function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, exportMode }) {
+  function setRow(listKey, index, field, value) {
+    const rows = data[listKey].map((r, i) => (i === index ? Object.assign({}, r, { [field]: value }) : r));
+    onChange(listKey, rows);
+  }
+
+  return html`
+    <${SectionTitle}
+      label="Diagnostics"
+      sectionId="diagnostics"
+      sections=${sections}
+      onToggle=${onToggle}
+      exportMode=${exportMode}
+    />
+    <div class="diag-block">
+      <div class="diag-findings">
+        <div class="diag-label">Findings / what was checked</div>
+        <div class="notes-lined-wrap diag-findings-wrap">
+          <div class="notes-lines">
+            ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
+          </div>
+          <${RichText}
+            className="notes-box ruled-fill"
+            value=${data.findings}
+            onChange=${(v) => onChange("findings", v)}
+            multiline=${true}
+            disabled=${disabled}
+            exportMode=${exportMode}
+          />
+        </div>
+      </div>
+
+      <div class="diag-side">
+        <div class="diag-sub">
+          <div class="diag-label">Probable cause</div>
+          <div class="notes-lined-wrap diag-short-wrap">
+            <div class="notes-lines">
+              ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
+            </div>
+            <${RichText}
+              className="notes-box ruled-fill"
+              value=${data.cause}
+              onChange=${(v) => onChange("cause", v)}
+              multiline=${true}
+              disabled=${disabled}
+              exportMode=${exportMode}
+            />
+          </div>
+        </div>
+
+        <div class="diag-sub">
+          <div class="diag-label">Recommendation</div>
+          <div class="notes-lined-wrap diag-short-wrap">
+            <div class="notes-lines">
+              ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
+            </div>
+            <${RichText}
+              className="notes-box ruled-fill"
+              value=${data.recommendation}
+              onChange=${(v) => onChange("recommendation", v)}
+              multiline=${true}
+              disabled=${disabled}
+              exportMode=${exportMode}
+            />
+          </div>
+        </div>
+
+        <div class="diag-sub">
+          <div class="diag-label">Diagnostic time</div>
+          <table class="diag-time">
+            <thead>
+              <tr><th>Date</th><th>Hours</th><th>What was done</th></tr>
+            </thead>
+            <tbody>
+              ${data.timeLog.map(
+                (row, i) => html`
+                  <tr key=${i}>
+                    <td>
+                      <input type="text" value=${row.date} disabled=${disabled}
+                        onChange=${(e) => setRow("timeLog", i, "date", e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="text" value=${row.hours} disabled=${disabled}
+                        onChange=${(e) => setRow("timeLog", i, "hours", e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="text" value=${row.note} disabled=${disabled}
+                        onChange=${(e) => setRow("timeLog", i, "note", e.target.value)} />
+                    </td>
+                  </tr>
+                `
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    ${sections.faultCodes &&
+    html`
+      <${SectionTitle}
+        label="Fault Codes"
+        sectionId="faultCodes"
+        sections=${sections}
+        onToggle=${onToggle}
+        exportMode=${exportMode}
+      />
+      <table class="diag-codes">
+        <thead>
+          <tr><th>Code</th><th>Description</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          ${data.faultCodes.map(
+            (row, i) => html`
+              <tr key=${i}>
+                <td>
+                  <input type="text" value=${row.code} placeholder="P0125" disabled=${disabled}
+                    onChange=${(e) => setRow("faultCodes", i, "code", e.target.value)} />
+                </td>
+                <td>
+                  <input type="text" value=${row.description} disabled=${disabled}
+                    onChange=${(e) => setRow("faultCodes", i, "description", e.target.value)} />
+                </td>
+                <td>
+                  <input type="text" value=${row.status} placeholder="active" disabled=${disabled}
+                    onChange=${(e) => setRow("faultCodes", i, "status", e.target.value)} />
+                </td>
+              </tr>
+            `
+          )}
+        </tbody>
+      </table>
+    `}
+  `;
+}
+
 function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStatus, initialState, user }) {
   const initial = buildInitialState();
   // When resuming a saved job, initialState carries every persisted field;
@@ -797,6 +990,8 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   const [oilSpecBy, setOilSpecBy] = React.useState(() => seed("oilSpecBy", initial.oilSpecBy));
   const [fluids, setFluids] = React.useState(() => seed("fluids", initial.fluids));
   const [preService, setPreService] = React.useState(() => seed("preService", initial.preService));
+  const [sections, setSections] = React.useState(() => seed("sections", initial.sections));
+  const [diagnostics, setDiagnostics] = React.useState(() => seed("diagnostics", initial.diagnostics));
   const [officeNotes, setOfficeNotes] = React.useState(() => seed("officeNotes", NOTES_BLANK_VALUE));
   const [officeNotesBy, setOfficeNotesBy] = React.useState(() => seed("officeNotesBy", ""));
   const [aboveCar, setAboveCar] = React.useState(() => seed("aboveCar", initial.aboveCar));
@@ -831,6 +1026,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   const [editUnlocked, setEditUnlocked] = React.useState(false);
 
   const page1Ref = React.useRef(null);
+  const diagPageRef = React.useRef(null);
   const page2Ref = React.useRef(null);
   const photoPageRefs = React.useRef([]);
   const photoInputRef = React.useRef(null);
@@ -888,6 +1084,26 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // never auto-filled, so the gate would otherwise be permanently shut on a
   // freshly pre-filled booking.
   const page2Locked = (kilometersMissing || logbookMissing) && !isOffice;
+
+  // Page 2 exists to hold the physical inspection. Switch all three of its
+  // groups off — a diagnosis on a towed-in car with no service work — and
+  // there is nothing left to put on it, so the page isn't rendered at all
+  // rather than printing a blank second sheet.
+  const page2Used = sections.aboveCar || sections.wheels || sections.underCar;
+
+  // Where the diagnostics section goes depends on what else is on the card,
+  // because a page is one A4 sheet and cannot grow.
+  //
+  // Diagnosis-only job (service sections switched off): it sits on page 1 and
+  // the findings box expands into the space they freed — measured at 320px of
+  // ruled writing instead of the 248px a normal notes box gets.
+  //
+  // Service AND diagnosis on the same visit (routine here — a car booked for
+  // a service that the customer also wants looked at, or the reverse): page 1
+  // is already full, so diagnostics takes a sheet of its own. Measured:
+  // forcing both onto page 1 gives 1486px against a 1123px budget.
+  const diagOnOwnPage = sections.diagnostics && (sections.fluids || sections.preService);
+  const diagOnPage1 = sections.diagnostics && !diagOnOwnPage;
 
   const updateHeader = (key, value) => {
     setHeader((prev) => ({ ...prev, [key]: value }));
@@ -1014,9 +1230,43 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     setJobStatus("in-progress");
   }
 
+  // Switching a section off HIDES it — it never deletes what is in it, so
+  // turning it back on brings every tick and every line of text back exactly
+  // as it was. That makes a mis-tap recoverable, but it also means content
+  // can be sitting in a section that isn't on the card, so hiding something
+  // with entries in it asks first, and anything still hidden is flagged
+  // on screen by SectionAdder.
+  function updateDiagnostics(key, value) {
+    setDiagnostics((prev) => Object.assign({}, prev, { [key]: value }));
+  }
+
+  function toggleSection(id) {
+    const def = SECTION_DEFS.find((d) => d.id === id);
+    const turningOff = sections[id];
+    if (turningOff && def && def.hasContent(buildSaveableState())) {
+      const ok = window.confirm(
+        def.label +
+          " has entries in it.\n\nRemoving it hides it from the card and from the exported PDF. " +
+          "Nothing is deleted — adding it back restores everything.\n\nRemove it?"
+      );
+      if (!ok) return;
+    }
+    setSections((prev) => Object.assign({}, prev, { [id]: !prev[id] }));
+  }
+
+  // Sections that are switched off but still hold entries. Surfaced on screen
+  // only — a hidden section's content never reaches the printed card, and
+  // silently dropping work off the PDF is the one failure mode this whole
+  // hide-don't-delete design has to stay honest about.
+  const hiddenWithContent = React.useMemo(() => {
+    const s = buildSaveableState();
+    return SECTION_DEFS.filter((d) => !sections[d.id] && d.hasContent(s)).map((d) => d.id);
+  }, [sections, fluids, preService, aboveCar, underCar, wheels, tyrePressure, tyreSize, diagnostics]);
+
   function buildSaveableState() {
     return {
       header, headerBy, oilSpec, oilSpecBy, fluids, preService,
+      sections, diagnostics,
       officeNotes, officeNotesBy, aboveCar, underCar, underCarBy,
       wheels, tyrePressure, tyreSize,
       notes2Left, notes2LeftBy, notes2Right, notes2RightBy,
@@ -1109,7 +1359,15 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
       const photoPageCount = Math.ceil(photos.length / PHOTOS_PER_PAGE);
-      const pages = [page1Ref.current, page2Ref.current, ...photoPageRefs.current.slice(0, photoPageCount)];
+      // Filtered because page 2 is not rendered at all when every one of its
+      // sections is switched off — a diagnosis-only card is genuinely one
+      // page, and html2canvas would throw on the null ref.
+      const pages = [
+        page1Ref.current,
+        diagPageRef.current,
+        page2Ref.current,
+        ...photoPageRefs.current.slice(0, photoPageCount),
+      ].filter(Boolean);
       for (let i = 0; i < pages.length; i++) {
         const canvas = await html2canvas(pages[i], {
           scale: 2,
@@ -1178,6 +1436,10 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     if (s.oilSpecBy) setOilSpecBy(s.oilSpecBy);
     if (s.fluids) setFluids(s.fluids);
     if (s.preService) setPreService(s.preService);
+    // Section switches sync like any other field, so the office turning the
+    // diagnostics section on makes it appear on the tech's tablet.
+    if (s.sections) setSections(s.sections);
+    if (s.diagnostics) setDiagnostics(s.diagnostics);
     if (s.officeNotes !== undefined) setOfficeNotes(s.officeNotes);
     if (s.officeNotesBy !== undefined) setOfficeNotesBy(s.officeNotesBy);
     if (s.aboveCar) setAboveCar(s.aboveCar);
@@ -1296,6 +1558,13 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         </div>
       </header>
 
+      <${SectionAdder}
+        sections=${sections}
+        onToggle=${toggleSection}
+        hiddenWithContent=${hiddenWithContent}
+        exportMode=${exportMode}
+      />
+
       <main class=${"pages" + (locked ? " pages-locked" : "")}>
         <section class="page" id="page1" ref=${page1Ref}>
           <div class="page-label">Page 1</div>
@@ -1353,9 +1622,30 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               status=${preService[ENGINE_LIGHT_ITEM.key].status}
               onChange=${(v) => updatePreServiceSimple(ENGINE_LIGHT_ITEM.key, v)}
             />
+            ${!exportMode &&
+            html`
+              <button
+                type="button"
+                class=${"diag-toggle" + (sections.diagnostics ? " is-on" : "")}
+                onClick=${() => toggleSection("diagnostics")}
+                title=${sections.diagnostics
+                  ? "Remove the diagnostics section"
+                  : "Add the diagnostics section to this card"}
+              >
+                ${sections.diagnostics ? "−" : "+"} Diagnostics
+              </button>
+            `}
           </div>
 
-          <div class="section-title">Fluids & Filters</div>
+          ${sections.fluids &&
+          html`
+          <${SectionTitle}
+            label="Fluids & Filters"
+            sectionId="fluids"
+            sections=${sections}
+            onToggle=${toggleSection}
+            exportMode=${exportMode}
+          />
           <div class="fluids-grid">
             <div class="fluids-col">
               ${FLUID_ROWS_COL1.map(
@@ -1386,8 +1676,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               )}
             </div>
           </div>
+          `}
 
-          <div class="section-title">Pre-Service Checks</div>
+          ${sections.preService &&
+          html`
+          <${SectionTitle}
+            label="Pre-Service Checks"
+            sectionId="preService"
+            sections=${sections}
+            onToggle=${toggleSection}
+            exportMode=${exportMode}
+          />
           <div class="prelights-grid">
             <div class="prelights-col">
               <div class="prelights-heading">Front of Vehicle</div>
@@ -1438,6 +1737,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               />
             </div>
           </div>
+          `}
+
+          ${diagOnPage1 &&
+          html`<${DiagnosticsSection}
+            data=${diagnostics}
+            sections=${sections}
+            onChange=${updateDiagnostics}
+            onToggle=${toggleSection}
+            disabled=${locked}
+            exportMode=${exportMode}
+          />`}
 
           <div class="section-title">Notes (office use only)</div>
           <div class="notes-lined-wrap">
@@ -1455,6 +1765,23 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           </div>
         </section>
 
+        ${diagOnOwnPage &&
+        html`
+        <section class="page" id="pagediag" ref=${diagPageRef}>
+          <div class="page-label">Diagnostics</div>
+          <${DiagnosticsSection}
+            data=${diagnostics}
+            sections=${sections}
+            onChange=${updateDiagnostics}
+            onToggle=${toggleSection}
+            disabled=${locked}
+            exportMode=${exportMode}
+          />
+        </section>
+        `}
+
+        ${page2Used &&
+        html`
         <section class="page" id="page2" ref=${page2Ref}>
           <div class="page-label">Page 2</div>
 
@@ -1468,8 +1795,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           `}
 
           <div class="two-col">
+            ${sections.aboveCar &&
+            html`
             <div class="col">
-              <div class="section-title">Above Car <span class="hint">(fill before car goes up)</span></div>
+              <${SectionTitle}
+                label="Above Car"
+                hint="(fill before car goes up)"
+                sectionId="aboveCar"
+                sections=${sections}
+                onToggle=${toggleSection}
+                exportMode=${exportMode}
+              />
               <p class="condition-legend">
                 <span class="status-btn status-good active"></span> Good
                 <span class="status-btn status-attention active"></span> Needs attention
@@ -1490,8 +1826,17 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 `
               )}
             </div>
+            `}
+            ${sections.wheels &&
+            html`
             <div class="col">
-              <div class="section-title">Wheel Measurements</div>
+              <${SectionTitle}
+                label="Wheel Measurements"
+                sectionId="wheels"
+                sections=${sections}
+                onToggle=${toggleSection}
+                exportMode=${exportMode}
+              />
               <${WheelGrid}
                 wheels=${wheels}
                 tyrePressure=${tyrePressure}
@@ -1503,9 +1848,19 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 exportMode=${exportMode}
               />
             </div>
+            `}
           </div>
 
-          <div class="section-title">Under Car <span class="hint">(fill before car goes down)</span></div>
+          ${sections.underCar &&
+          html`
+          <${SectionTitle}
+            label="Under Car"
+            hint="(fill before car goes down)"
+            sectionId="underCar"
+            sections=${sections}
+            onToggle=${toggleSection}
+            exportMode=${exportMode}
+          />
           <div class="freetext-full">
             ${UNDER_CAR_ITEMS.map(
               (item) => html`
@@ -1521,6 +1876,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               `
             )}
           </div>
+          `}
 
           <div class="section-title">Notes</div>
           <div class="book-wrap">
@@ -1554,6 +1910,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             </div>
           </div>
         </section>
+        `}
 
         <input
           type="file"

@@ -211,6 +211,18 @@ var RULE_DRAW_INDEXES = Array.from({ length: 60 }, (_, i) => i);
 var NOTES_BLANK_VALUE = Array(NOTES_LINE_INDEXES.length).fill("").join("\n");
 var FILL_BLANK_VALUE = Array(FILL_LINE_INDEXES.length).fill("").join("\n");
 
+// Probable cause and Recommendation are short by design — the technician
+// writes the detail under Findings, and these two are the lines the quote is
+// actually built from, so they stay tight enough to read at a glance.
+var DIAGNOSIS_LINE_INDEXES = Array.from({ length: 3 }, (_, i) => i);
+var DIAGNOSIS_BLANK_VALUE = Array(DIAGNOSIS_LINE_INDEXES.length).fill("").join("\n");
+
+// Rows in the diagnostic time log and the fault-code list. Kept modest: real
+// jobs do run to ten-plus labour entries, but the card is one A4 sheet and
+// the common case is one or two sittings.
+var DIAGNOSTIC_TIME_ROWS = 5;
+var FAULT_CODE_ROWS = 4;
+
 // Compact per-item notes (e.g. one damage-diagram view) — enough room to
 // actually write something without eating the whole page.
 var DIAGRAM_NOTES_LINE_INDEXES = Array.from({ length: 5 }, (_, i) => i);
@@ -264,6 +276,145 @@ function generateCardCode() {
     code += CARD_CODE_CHARS[Math.floor(Math.random() * CARD_CODE_CHARS.length)];
   }
   return code;
+}
+
+// Switchable sections. The card is one modular sheet rather than a set of
+// fixed templates: a car in for a diagnosis and no service is the same card
+// with the service sections switched off, and a service that turns into a
+// diagnosis mid-job gets the diagnostics section switched on without
+// starting anything new.
+//
+// Detection of "this is a diagnostics job" is deliberately NOT automated.
+// Checked against the real AMS Bookings calendar: about half of genuine
+// diagnostic bookings contain no "diag"/"diagnosis" word anywhere ("Cooling
+// System Concern", "CEL/Brake issue", "dash board lights & headlights"), so
+// a keyword rule would miss them and fire on ordinary repairs. A person
+// decides, with one tap.
+//
+// `hasContent` answers "would switching this off hide real work?" — used to
+// confirm before hiding, and to warn on screen when a hidden section still
+// holds entries (hiding never deletes, so that content is invisible on the
+// printed card unless it is switched back on).
+var SECTION_DEFS = [
+  {
+    id: "fluids",
+    label: "Fluids & Filters",
+    default: true,
+    hasContent: function (s) {
+      return Object.keys(s.fluids || {}).some(function (k) {
+        return s.fluids[k].checked || (s.fluids[k].value || "").trim();
+      });
+    },
+  },
+  {
+    id: "preService",
+    label: "Pre-Service Checks",
+    default: true,
+    hasContent: function (s) {
+      var ps = s.preService || {};
+      return ["front", "rear"].some(function (side) {
+        return Object.keys(ps[side] || {}).some(function (k) {
+          return ps[side][k].status || (ps[side][k].note || "").trim();
+        });
+      });
+    },
+  },
+  {
+    id: "diagnostics",
+    label: "Diagnostics",
+    default: false,
+    hasContent: function (s) {
+      var d = s.diagnostics || {};
+      return (
+        hasInk(d.findings) ||
+        hasInk(d.cause) ||
+        hasInk(d.recommendation) ||
+        (d.timeLog || []).some(function (r) {
+          return (r.date || "").trim() || (r.hours || "").trim();
+        })
+      );
+    },
+  },
+  {
+    id: "faultCodes",
+    label: "Fault Codes",
+    default: false,
+    hasContent: function (s) {
+      return ((s.diagnostics || {}).faultCodes || []).some(function (r) {
+        return (r.code || "").trim() || (r.description || "").trim() || (r.status || "").trim();
+      });
+    },
+  },
+  {
+    id: "aboveCar",
+    label: "Above Car",
+    default: true,
+    hasContent: function (s) {
+      return Object.keys(s.aboveCar || {}).some(function (k) {
+        return s.aboveCar[k].status || hasInk(s.aboveCar[k].note);
+      });
+    },
+  },
+  {
+    id: "wheels",
+    // One control covers the whole measurements block — wheel treads, brake
+    // pads, tyre pressure and tyre size — because they are one physical walk
+    // around the car, not four separate decisions.
+    label: "Wheel Measurements",
+    default: true,
+    // Walked generically rather than field by field: wheels nests three deep
+    // (wheel -> metric -> sub-field), and a hand-written two-level loop threw
+    // on the sub-field objects.
+    hasContent: function (s) {
+      return anyTextIn(s.wheels) || anyTextIn(s.tyrePressure) || anyTextIn(s.tyreSize);
+    },
+  },
+  {
+    id: "underCar",
+    label: "Under Car",
+    default: true,
+    hasContent: function (s) {
+      return Object.keys(s.underCar || {}).some(function (k) {
+        return hasInk(s.underCar[k]);
+      });
+    },
+  },
+];
+
+// Notes boxes are pre-filled with blank ruled lines so every line is
+// clickable, so "not empty" is not the same as "has something written in
+// it" — strip tags and blank lines before deciding.
+// True if any string anywhere in a nested state slice has something typed in
+// it. Walks whatever shape it is handed, so it can't be broken by a slice
+// nesting deeper than a hand-written loop expected.
+function anyTextIn(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number" || typeof value === "boolean") return !!value;
+  if (Array.isArray(value)) return value.some(anyTextIn);
+  if (typeof value === "object") {
+    return Object.keys(value).some(function (k) {
+      return anyTextIn(value[k]);
+    });
+  }
+  return false;
+}
+
+function hasInk(value) {
+  if (!value) return false;
+  return String(value)
+    .replace(/<br\s*\/?>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .trim().length > 0;
+}
+
+function buildDefaultSections() {
+  var sections = {};
+  SECTION_DEFS.forEach(function (def) {
+    sections[def.id] = def.default;
+  });
+  return sections;
 }
 
 function buildInitialState() {
@@ -353,5 +504,39 @@ function buildInitialState() {
     wheels: wheels,
     tyrePressure: tyrePressure,
     tyreSize: tyreSize,
+    sections: buildDefaultSections(),
+    diagnostics: buildInitialDiagnostics(),
   };
+}
+
+// Diagnostics is a written record, not a checklist — you cannot pre-list what
+// you are looking for until you have looked. The structure comes from the
+// stages of a diagnosis, confirmed against a real job (the 1UQ3XT Subaru):
+// the technician writes what was checked, then the probable cause separately
+// (the quote is written off the cause, not the finding), then what he
+// recommends.
+//
+// The time log exists because a diagnosis is often not one sitting — real
+// jobs on this calendar accumulate ten or more labour entries across weeks
+// ("Diagnostic time 1.5hours 11:30am-1pm", "Labour 2.5hours 28/10/24").
+function buildInitialDiagnostics() {
+  return {
+    findings: FILL_BLANK_VALUE,
+    findingsBy: "",
+    cause: DIAGNOSIS_BLANK_VALUE,
+    causeBy: "",
+    recommendation: DIAGNOSIS_BLANK_VALUE,
+    recommendationBy: "",
+    timeLog: buildBlankRows(DIAGNOSTIC_TIME_ROWS, { date: "", hours: "", note: "" }),
+    // Free text status rather than a preset list — Ricky writes it himself
+    // ("P0125 - Cat converter bank 1 sensor 2 too rich (active)") and the
+    // wording varies.
+    faultCodes: buildBlankRows(FAULT_CODE_ROWS, { code: "", description: "", status: "" }),
+  };
+}
+
+function buildBlankRows(count, shape) {
+  var rows = [];
+  for (var i = 0; i < count; i++) rows.push(Object.assign({}, shape));
+  return rows;
 }
