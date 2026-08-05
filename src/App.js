@@ -1038,12 +1038,16 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
     />
     <div class="diag-block">
       ${[
-        { key: "findings", label: "Findings / what was checked", cls: "diag-findings-wrap" },
+        // Only findings grows. The other two are fixed at six lines, so the
+        // slack has to be handed down to this one explicitly — a flexible
+        // child inside a non-growing wrapper just collapses (the wrapper
+        // swallowed the space and findings sat on its min-height).
+        { key: "findings", label: "Findings / what was checked", cls: "diag-findings-wrap", grow: true },
         { key: "cause", label: "Probable cause", cls: "diag-short-wrap" },
         { key: "recommendation", label: "Recommendation", cls: "diag-short-wrap" },
       ].map(
         (box) => html`
-          <div class="diag-sub" key=${box.key}>
+          <div class=${"diag-sub" + (box.grow ? " diag-sub-grow" : "")} key=${box.key}>
             <div class="diag-label">${box.label}</div>
             <div class=${"notes-lined-wrap " + box.cls}>
               <div class="notes-lines">
@@ -1153,6 +1157,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
 
   const page1Ref = React.useRef(null);
   const diagPageRef = React.useRef(null);
+  const quotePageRef = React.useRef(null);
   const page2Ref = React.useRef(null);
   const photoPageRefs = React.useRef([]);
   const photoInputRef = React.useRef(null);
@@ -1233,24 +1238,22 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // the oil bar, the logbook panel and the 248px notes box, so it fits ONE of
   // them, not both: diagnostics + quote + fault codes measured 1380px against
   // the 1123px budget. Whatever doesn't fit goes to a sheet of its own.
-  // Fault codes only exist inside the diagnostics section, so they only cost
-  // page space when both are on. Eight code rows plus the three writing boxes
-  // is more than page 1 can carry on top of the header, the oil bar and the
-  // notes box — measured at 1323px — so their presence pushes diagnostics
-  // onto a sheet of its own.
-  const codesOnCard = sections.diagnostics && sections.faultCodes;
-  const page1HasRoom = !sections.fluids && !sections.preService && !codesOnCard;
-  const diagOnPage1 = sections.diagnostics && page1HasRoom;
-  const quoteOnPage1 = sections.quote && page1HasRoom && !sections.diagnostics;
-  const extrasPageUsed =
-    (sections.diagnostics && !diagOnPage1) || (sections.quote && !quoteOnPage1);
+  // Diagnostics and the quote each take a whole sheet of their own whenever
+  // they are switched on. Earlier versions squeezed them onto page 1 when
+  // there was room, and shared one sheet between them, which meant the
+  // findings box had to be sized around whatever else happened to be on --
+  // and left a block of the diagnostics sheet reserved for a quote that may
+  // never be added. Own sheets keep it predictable: findings simply takes
+  // every pixel the other boxes don't.
+  const diagPageUsed = sections.diagnostics;
+  const quotePageUsed = sections.quote;
 
   // Photo pages carry on from however many sheets actually precede them.
-  // Hardcoding "Page 3" was already wrong once page 2 could disappear, and
-  // the diagnostics sheet makes it wrong again. Must stay below
-  // extrasPageUsed — declared above it this hits the temporal dead zone and
-  // blanks the whole card.
-  const sheetsBeforePhotos = 1 + (page2Used ? 1 : 0) + (extrasPageUsed ? 1 : 0);
+  // Hardcoding "Page 3" was already wrong once page 2 could disappear.
+  // Must stay below the flags it reads — declared above them this hits the
+  // temporal dead zone and blanks the whole card.
+  const sheetsBeforePhotos =
+    1 + (page2Used ? 1 : 0) + (diagPageUsed ? 1 : 0) + (quotePageUsed ? 1 : 0);
 
   const updateHeader = (key, value) => {
     setHeader((prev) => ({ ...prev, [key]: value }));
@@ -1521,6 +1524,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         page1Ref.current,
         page2Ref.current,
         diagPageRef.current,
+        quotePageRef.current,
         ...photoPageRefs.current.slice(0, photoPageCount),
       ].filter(Boolean);
       for (let i = 0; i < pages.length; i++) {
@@ -1895,27 +1899,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           </div>
           `}
 
-          ${diagOnPage1 &&
-          html`<${DiagnosticsSection}
-            data=${diagnostics}
-            sections=${sections}
-            onChange=${updateDiagnostics}
-            onToggle=${toggleSection}
-            disabled=${locked}
-            exportMode=${exportMode}
-          />`}
-          ${quoteOnPage1 &&
-          html`<${QuoteSection}
-            quote=${quote}
-            header=${header}
-            diagnostics=${diagnostics}
-            sections=${sections}
-            onChange=${updateQuote}
-            onToggle=${toggleSection}
-            disabled=${locked}
-            exportMode=${exportMode}
-          />`}
-
           <div class="section-title">Notes (office use only)</div>
           <div class="notes-lined-wrap">
             <div class="notes-lines">
@@ -2066,23 +2049,26 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
 
         ${/* After page 2, not before it: the service pages are the running
               order of the job and diagnostics is the write-up that follows. */ ""}
-        ${extrasPageUsed &&
+        ${diagPageUsed &&
         html`
         <section class="page" id="pagediag" ref=${diagPageRef}>
-          <div class="page-label">${sections.diagnostics && !diagOnPage1 ? "Diagnostics" : "Quote"}</div>
-          ${sections.diagnostics &&
-          !diagOnPage1 &&
-          html`<${DiagnosticsSection}
+          <div class="page-label">Diagnostics</div>
+          <${DiagnosticsSection}
             data=${diagnostics}
             sections=${sections}
             onChange=${updateDiagnostics}
             onToggle=${toggleSection}
             disabled=${locked}
             exportMode=${exportMode}
-          />`}
-          ${sections.quote &&
-          !quoteOnPage1 &&
-          html`<${QuoteSection}
+          />
+        </section>
+        `}
+
+        ${quotePageUsed &&
+        html`
+        <section class="page" id="pagequote" ref=${quotePageRef}>
+          <div class="page-label">Quote</div>
+          <${QuoteSection}
             quote=${quote}
             header=${header}
             diagnostics=${diagnostics}
@@ -2091,7 +2077,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             onToggle=${toggleSection}
             disabled=${locked}
             exportMode=${exportMode}
-          />`}
+          />
         </section>
         `}
 

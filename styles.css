@@ -1229,24 +1229,28 @@ input.office-written[type="checkbox"] {
    stacked on the right. The whole thing flexes so it absorbs whatever height
    the switched-off service sections freed up. */
 /* Findings, Probable cause and Recommendation stack in that order, each the
-   full width of the page. They were previously side by side with findings in
-   a tall left column, which left a dead gap on the right and made the
-   findings box far longer than anything anyone writes in it.
-   Capped so it grows into space freed by switched-off sections without
-   taking over the sheet. */
+   full width of the page, with the fault-code list sitting below them at the
+   bottom of the sheet. No cap: the diagnostics page is its own sheet now and
+   is meant to fill it, so findings takes every pixel the other three don't. */
 .diag-block {
   display: flex;
   flex-direction: column;
   gap: 8px;
   flex: 1 1 auto;
-  max-height: 560px;
   min-height: 0;
 }
 
 .diag-sub {
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
   min-height: 0;
+}
+
+/* The one box that absorbs the leftover height. Without this the wrapper
+   sizes to its content and the flexible box inside it collapses. */
+.diag-sub-grow {
+  flex: 1 1 auto;
 }
 
 .diag-label {
@@ -1263,14 +1267,15 @@ input.office-written[type="checkbox"] {
 .notes-lined-wrap.diag-findings-wrap {
   height: auto;
   flex: 1 1 auto;
-  /* Nine ruled lines even on the busiest page (diagnostics + 8 fault codes +
-     a full quote). Left at the old 120px it collapsed to five lines, which
-     is not enough to write up a diagnosis. */
   min-height: 220px;
 }
 
+/* Exactly six 24px lines with nothing wasted: 1px border + 6px top padding
+   + (6 x 24) = 151. Keep this in step with DIAGNOSIS_LINE_INDEXES in
+   config.js — if the box is taller than the blank lines pre-filled into it,
+   the extra lines cannot be clicked into and leave a dead gap. */
 .notes-lined-wrap.diag-short-wrap {
-  height: 100px;
+  height: 151px;
   flex: 0 0 auto;
 }
 

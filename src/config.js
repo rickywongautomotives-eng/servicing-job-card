@@ -211,10 +211,16 @@ var RULE_DRAW_INDEXES = Array.from({ length: 60 }, (_, i) => i);
 var NOTES_BLANK_VALUE = Array(NOTES_LINE_INDEXES.length).fill("").join("\n");
 var FILL_BLANK_VALUE = Array(FILL_LINE_INDEXES.length).fill("").join("\n");
 
-// Probable cause and Recommendation are short by design — the technician
-// writes the detail under Findings, and these two are the lines the quote is
-// actually built from, so they stay tight enough to read at a glance.
-var DIAGNOSIS_LINE_INDEXES = Array.from({ length: 3 }, (_, i) => i);
+// Probable cause and Recommendation: six writing lines each.
+//
+// This count MUST match the number of 24px lines that fit in
+// .diag-short-wrap (styles.css). A contenteditable can only place the caret
+// where content already exists, so if the box is taller than the number of
+// blank lines pre-filled into it, the lines past the end are dead — clicking
+// one drops the caret back at the end of the last real line. At three, in a
+// box sized for four, that showed up as "it only allows me to click the
+// first 2 lines" plus a dead gap at the bottom of every box.
+var DIAGNOSIS_LINE_INDEXES = Array.from({ length: 6 }, (_, i) => i);
 var DIAGNOSIS_BLANK_VALUE = Array(DIAGNOSIS_LINE_INDEXES.length).fill("").join("\n");
 
 // Eight fault-code rows: Ricky has seen cars come in showing seven or eight
