@@ -840,6 +840,31 @@ function SectionAdder({ sections, onToggle, hiddenWithContent, exportMode }) {
 // Findings, because the quote is written off the cause. Watching a real job
 // go through: the tech recorded "radiator cracked" and, separately, a brief
 // summary of what could have caused it; the office quoted from the second.
+// One cell of the diagnostics/quote tables.
+//
+// html2canvas cannot reliably paint a live <input>'s value, which is why
+// WheelGrid and RichText both swap to plain elements for the capture. These
+// tables must do the same or a filled-in quote, time log or fault-code list
+// prints completely blank — the values are on screen and simply absent from
+// the PDF, which is the worst kind of failure here because nothing looks
+// wrong until the paperwork is filed.
+function CellInput({ value, onChange, disabled, exportMode, placeholder, align }) {
+  const cls = align === "right" ? " cell-right" : "";
+  if (exportMode) {
+    return html`<div class=${"cell-text export-text" + cls}>${value}</div>`;
+  }
+  return html`
+    <input
+      type="text"
+      class=${cls.trim()}
+      value=${value}
+      placeholder=${placeholder}
+      disabled=${disabled}
+      onChange=${(e) => onChange(e.target.value)}
+    />
+  `;
+}
+
 // Strips the rich-text markup out of a notes field so it can go into a plain
 // SMS. <br> becomes a newline first, or every line runs together.
 function notesToPlainText(value) {
@@ -958,16 +983,16 @@ function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle
           (row, i) => html`
             <tr key=${i}>
               <td>
-                <input type="text" value=${row.desc} disabled=${disabled}
-                  onChange=${(e) => setRow(i, "desc", e.target.value)} />
+                <${CellInput} value=${row.desc} disabled=${disabled} exportMode=${exportMode}
+                  onChange=${(v) => setRow(i, "desc", v)} />
               </td>
               <td class="quote-num">
-                <input type="text" value=${row.sell} disabled=${disabled}
-                  onChange=${(e) => setRow(i, "sell", e.target.value)} />
+                <${CellInput} value=${row.sell} align="right" disabled=${disabled} exportMode=${exportMode}
+                  onChange=${(v) => setRow(i, "sell", v)} />
               </td>
               <td class="quote-num quote-margin">
-                <input type="text" value=${row.cost} disabled=${disabled}
-                  onChange=${(e) => setRow(i, "cost", e.target.value)} />
+                <${CellInput} value=${row.cost} align="right" disabled=${disabled} exportMode=${exportMode}
+                  onChange=${(v) => setRow(i, "cost", v)} />
               </td>
             </tr>
           `
@@ -1075,16 +1100,16 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
                 (row, i) => html`
                   <tr key=${i}>
                     <td>
-                      <input type="text" value=${row.date} disabled=${disabled}
-                        onChange=${(e) => setRow("timeLog", i, "date", e.target.value)} />
+                      <${CellInput} value=${row.date} disabled=${disabled} exportMode=${exportMode}
+                        onChange=${(v) => setRow("timeLog", i, "date", v)} />
                     </td>
                     <td>
-                      <input type="text" value=${row.hours} disabled=${disabled}
-                        onChange=${(e) => setRow("timeLog", i, "hours", e.target.value)} />
+                      <${CellInput} value=${row.hours} disabled=${disabled} exportMode=${exportMode}
+                        onChange=${(v) => setRow("timeLog", i, "hours", v)} />
                     </td>
                     <td>
-                      <input type="text" value=${row.note} disabled=${disabled}
-                        onChange=${(e) => setRow("timeLog", i, "note", e.target.value)} />
+                      <${CellInput} value=${row.note} disabled=${disabled} exportMode=${exportMode}
+                        onChange=${(v) => setRow("timeLog", i, "note", v)} />
                     </td>
                   </tr>
                 `
@@ -1113,16 +1138,16 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
             (row, i) => html`
               <tr key=${i}>
                 <td>
-                  <input type="text" value=${row.code} placeholder="P0125" disabled=${disabled}
-                    onChange=${(e) => setRow("faultCodes", i, "code", e.target.value)} />
+                  <${CellInput} value=${row.code} placeholder="P0125" disabled=${disabled} exportMode=${exportMode}
+                    onChange=${(v) => setRow("faultCodes", i, "code", v)} />
                 </td>
                 <td>
-                  <input type="text" value=${row.description} disabled=${disabled}
-                    onChange=${(e) => setRow("faultCodes", i, "description", e.target.value)} />
+                  <${CellInput} value=${row.description} disabled=${disabled} exportMode=${exportMode}
+                    onChange=${(v) => setRow("faultCodes", i, "description", v)} />
                 </td>
                 <td>
-                  <input type="text" value=${row.status} placeholder="active" disabled=${disabled}
-                    onChange=${(e) => setRow("faultCodes", i, "status", e.target.value)} />
+                  <${CellInput} value=${row.status} placeholder="active" disabled=${disabled} exportMode=${exportMode}
+                    onChange=${(v) => setRow("faultCodes", i, "status", v)} />
                 </td>
               </tr>
             `

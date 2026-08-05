@@ -220,7 +220,7 @@ var DIAGNOSIS_BLANK_VALUE = Array(DIAGNOSIS_LINE_INDEXES.length).fill("").join("
 // Rows in the diagnostic time log and the fault-code list. Kept modest: real
 // jobs do run to ten-plus labour entries, but the card is one A4 sheet and
 // the common case is one or two sittings.
-var DIAGNOSTIC_TIME_ROWS = 5;
+var DIAGNOSTIC_TIME_ROWS = 8;
 var FAULT_CODE_ROWS = 4;
 
 // Compact per-item notes (e.g. one damage-diagram view) — enough room to

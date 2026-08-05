@@ -1228,10 +1228,17 @@ input.office-written[type="checkbox"] {
 /* Findings on the left taking the bulk of the width, the three short blocks
    stacked on the right. The whole thing flexes so it absorbs whatever height
    the switched-off service sections freed up. */
+/* Grows into whatever the switched-off sections freed, but capped: left to
+   stretch freely on a page of its own the findings box ran to ~1400px and
+   about 35 ruled lines, with a dead gap beside it under the time log. A
+   writing box that tall reads as a mistake rather than as generous. The cap
+   is above what page 1 can ever offer, so the diagnosis-only layout there is
+   unaffected. */
 .diag-block {
   display: flex;
   gap: 10px;
   flex: 1 1 auto;
+  max-height: 560px;
   min-height: 0;
 }
 
@@ -1301,13 +1308,27 @@ input.office-written[type="checkbox"] {
 }
 
 .diag-time input,
-.diag-codes input {
+.diag-codes input,
+.diag-time .cell-text,
+.diag-codes .cell-text {
   width: 100%;
   border: none;
   background: transparent;
   font: inherit;
   color: inherit;
   padding: 2px 4px;
+}
+
+/* Plain-text stand-in used during PDF capture. Matches the input's box so
+   swapping in and out doesn't shift the row height. */
+.cell-text {
+  min-height: 21px;
+  display: block;
+}
+
+.cell-right,
+.cell-text.cell-right {
+  text-align: right;
 }
 
 .diag-time input:focus,
@@ -1346,7 +1367,8 @@ input.office-written[type="checkbox"] {
   border-bottom: 1px solid var(--line);
 }
 
-.quote-table input {
+.quote-table input,
+.quote-table .cell-text {
   width: 100%;
   border: none;
   background: transparent;
@@ -1461,9 +1483,16 @@ input.office-written[type="checkbox"] {
    scrolling) by using width instead of height. The border/radius lives on
    the outer wrap (not each page's own textarea) so it reads as one box with
    a single spine down the middle, not two boxes with redundant edges. */
+/* Capped for the same reason as .diag-block: this box fills whatever page 2
+   has left, which was fine when page 2 always carried Above Car, the wheel
+   measurements and Under Car. With sections switchable, removing Under Car
+   took it from its natural 250px to 586px and it read as a mistake. Growing
+   a little is useful; taking over the sheet is not. Leftover space below is
+   left as margin. */
 .book-wrap {
   display: flex;
   flex: 1 1 0;
+  max-height: 380px;
   min-height: 60px;
   border: 1px solid var(--line);
   border-radius: 6px;
