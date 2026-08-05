@@ -42,9 +42,33 @@
 <script>
   // PWA install + offline support. GitHub Pages (and any static host) serves
   // this over HTTPS, which is required for service workers to register.
+  //
+  // The reload below is the point of this block. sw.js calls skipWaiting()
+  // and clients.claim(), so a new version takes control of the open page --
+  // but the page is still running the JavaScript it already parsed, so the
+  // update is invisible until the NEXT load. That is why a deploy appeared
+  // to do nothing until you refreshed twice, which is impossible to guess
+  // from the outside and cost real time chasing "stale" deploys that had in
+  // fact shipped correctly.
+  //
+  // controllerchange also fires the very first time a worker installs (when
+  // there was no controller at all); reloading then would be pointless, so
+  // it is only acted on when this page was already controlled. The guard
+  // flag stops any chance of a reload loop.
   if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller;
+    var reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js");
+      navigator.serviceWorker.register("./sw.js").then(function (reg) {
+        // Ask straight away rather than waiting for the browser's own
+        // periodic check, so a deploy lands on the next open, not eventually.
+        reg.update();
+      });
     });
   }
 </script>
