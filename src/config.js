@@ -217,11 +217,9 @@ var FILL_BLANK_VALUE = Array(FILL_LINE_INDEXES.length).fill("").join("\n");
 var DIAGNOSIS_LINE_INDEXES = Array.from({ length: 3 }, (_, i) => i);
 var DIAGNOSIS_BLANK_VALUE = Array(DIAGNOSIS_LINE_INDEXES.length).fill("").join("\n");
 
-// Rows in the diagnostic time log and the fault-code list. Kept modest: real
-// jobs do run to ten-plus labour entries, but the card is one A4 sheet and
-// the common case is one or two sittings.
-var DIAGNOSTIC_TIME_ROWS = 8;
-var FAULT_CODE_ROWS = 4;
+// Eight fault-code rows: Ricky has seen cars come in showing seven or eight
+// codes at once, and a list that runs out is worse than one with spare lines.
+var FAULT_CODE_ROWS = 8;
 
 // Compact per-item notes (e.g. one damage-diagram view) — enough room to
 // actually write something without eating the whole page.
@@ -325,14 +323,7 @@ var SECTION_DEFS = [
     default: false,
     hasContent: function (s) {
       var d = s.diagnostics || {};
-      return (
-        hasInk(d.findings) ||
-        hasInk(d.cause) ||
-        hasInk(d.recommendation) ||
-        (d.timeLog || []).some(function (r) {
-          return (r.date || "").trim() || (r.hours || "").trim();
-        })
-      );
+      return hasInk(d.findings) || hasInk(d.cause) || hasInk(d.recommendation);
     },
   },
   {
@@ -542,11 +533,10 @@ var QUOTE_ROWS = 6;
 // stages of a diagnosis, confirmed against a real job (the 1UQ3XT Subaru):
 // the technician writes what was checked, then the probable cause separately
 // (the quote is written off the cause, not the finding), then what he
-// recommends.
+// recommends. All three stack full width, in that order.
 //
-// The time log exists because a diagnosis is often not one sitting — real
-// jobs on this calendar accumulate ten or more labour entries across weeks
-// ("Diagnostic time 1.5hours 11:30am-1pm", "Labour 2.5hours 28/10/24").
+// A diagnostic time log was built and then removed at Ricky's request
+// (2026-08-05) — he doesn't want it on the card. Don't reintroduce it.
 function buildInitialDiagnostics() {
   return {
     findings: FILL_BLANK_VALUE,
@@ -555,7 +545,6 @@ function buildInitialDiagnostics() {
     causeBy: "",
     recommendation: DIAGNOSIS_BLANK_VALUE,
     recommendationBy: "",
-    timeLog: buildBlankRows(DIAGNOSTIC_TIME_ROWS, { date: "", hours: "", note: "" }),
     // Free text status rather than a preset list — Ricky writes it himself
     // ("P0125 - Cat converter bank 1 sensor 2 too rich (active)") and the
     // wording varies.

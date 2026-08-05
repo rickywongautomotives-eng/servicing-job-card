@@ -1228,38 +1228,25 @@ input.office-written[type="checkbox"] {
 /* Findings on the left taking the bulk of the width, the three short blocks
    stacked on the right. The whole thing flexes so it absorbs whatever height
    the switched-off service sections freed up. */
-/* Grows into whatever the switched-off sections freed, but capped: left to
-   stretch freely on a page of its own the findings box ran to ~1400px and
-   about 35 ruled lines, with a dead gap beside it under the time log. A
-   writing box that tall reads as a mistake rather than as generous. The cap
-   is above what page 1 can ever offer, so the diagnosis-only layout there is
-   unaffected. */
+/* Findings, Probable cause and Recommendation stack in that order, each the
+   full width of the page. They were previously side by side with findings in
+   a tall left column, which left a dead gap on the right and made the
+   findings box far longer than anything anyone writes in it.
+   Capped so it grows into space freed by switched-off sections without
+   taking over the sheet. */
 .diag-block {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   flex: 1 1 auto;
   max-height: 560px;
-  min-height: 0;
-}
-
-.diag-findings {
-  flex: 1 1 58%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.diag-side {
-  flex: 1 1 42%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   min-height: 0;
 }
 
 .diag-sub {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .diag-label {
@@ -1269,27 +1256,30 @@ input.office-written[type="checkbox"] {
   margin-bottom: 2px;
 }
 
-/* Overrides the fixed 248px of a normal notes box: this one grows into the
-   space freed by whatever is switched off, which is the whole reason the
-   findings box is the one that expands. */
+/* Overrides the fixed 248px of a normal notes box: findings is the one that
+   absorbs freed space, since it's where the bulk of a diagnosis gets
+   written. Cause and Recommendation stay short on purpose — they are the two
+   lines the quote is built from, not the working notes. */
 .notes-lined-wrap.diag-findings-wrap {
   height: auto;
   flex: 1 1 auto;
-  min-height: 120px;
+  /* Nine ruled lines even on the busiest page (diagnostics + 8 fault codes +
+     a full quote). Left at the old 120px it collapsed to five lines, which
+     is not enough to write up a diagnosis. */
+  min-height: 220px;
 }
 
 .notes-lined-wrap.diag-short-wrap {
-  height: 76px;
+  height: 100px;
+  flex: 0 0 auto;
 }
 
-.diag-time,
 .diag-codes {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-.diag-time th,
 .diag-codes th {
   font-size: 10px;
   font-weight: 700;
@@ -1301,15 +1291,12 @@ input.office-written[type="checkbox"] {
   border-bottom: 1px solid var(--line-strong);
 }
 
-.diag-time td,
 .diag-codes td {
   padding: 0;
   border-bottom: 1px solid var(--line);
 }
 
-.diag-time input,
 .diag-codes input,
-.diag-time .cell-text,
 .diag-codes .cell-text {
   width: 100%;
   border: none;
@@ -1331,14 +1318,11 @@ input.office-written[type="checkbox"] {
   text-align: right;
 }
 
-.diag-time input:focus,
 .diag-codes input:focus {
   outline: none;
   background: var(--panel);
 }
 
-.diag-time td:first-child { width: 26%; }
-.diag-time td:nth-child(2) { width: 18%; }
 .diag-codes td:first-child { width: 18%; }
 .diag-codes td:last-child { width: 20%; }
 

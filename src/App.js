@@ -840,14 +840,14 @@ function SectionAdder({ sections, onToggle, hiddenWithContent, exportMode }) {
 // Findings, because the quote is written off the cause. Watching a real job
 // go through: the tech recorded "radiator cracked" and, separately, a brief
 // summary of what could have caused it; the office quoted from the second.
-// One cell of the diagnostics/quote tables.
+// One cell of the fault-code / quote tables.
 //
-// html2canvas cannot reliably paint a live <input>'s value, which is why
-// WheelGrid and RichText both swap to plain elements for the capture. These
-// tables must do the same or a filled-in quote, time log or fault-code list
-// prints completely blank — the values are on screen and simply absent from
-// the PDF, which is the worst kind of failure here because nothing looks
-// wrong until the paperwork is filed.
+// Swaps to plain text for the PDF capture, the same as WheelGrid and
+// RichText. In practice html2canvas DOES paint input values in this build —
+// checked against a real exported card, where the header fields printed
+// fine — so this is belt-and-braces rather than a fix for a live bug. It
+// stays because the rest of the card already works this way and because
+// relying on that behaviour is what the surrounding comments warn against.
 function CellInput({ value, onChange, disabled, exportMode, placeholder, align }) {
   const cls = align === "right" ? " cell-right" : "";
   if (exportMode) {
@@ -1037,87 +1037,30 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
       exportMode=${exportMode}
     />
     <div class="diag-block">
-      <div class="diag-findings">
-        <div class="diag-label">Findings / what was checked</div>
-        <div class="notes-lined-wrap diag-findings-wrap">
-          <div class="notes-lines">
-            ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
-          </div>
-          <${RichText}
-            className="notes-box ruled-fill"
-            value=${data.findings}
-            onChange=${(v) => onChange("findings", v)}
-            multiline=${true}
-            disabled=${disabled}
-            exportMode=${exportMode}
-          />
-        </div>
-      </div>
-
-      <div class="diag-side">
-        <div class="diag-sub">
-          <div class="diag-label">Probable cause</div>
-          <div class="notes-lined-wrap diag-short-wrap">
-            <div class="notes-lines">
-              ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
+      ${[
+        { key: "findings", label: "Findings / what was checked", cls: "diag-findings-wrap" },
+        { key: "cause", label: "Probable cause", cls: "diag-short-wrap" },
+        { key: "recommendation", label: "Recommendation", cls: "diag-short-wrap" },
+      ].map(
+        (box) => html`
+          <div class="diag-sub" key=${box.key}>
+            <div class="diag-label">${box.label}</div>
+            <div class=${"notes-lined-wrap " + box.cls}>
+              <div class="notes-lines">
+                ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
+              </div>
+              <${RichText}
+                className="notes-box ruled-fill"
+                value=${data[box.key]}
+                onChange=${(v) => onChange(box.key, v)}
+                multiline=${true}
+                disabled=${disabled}
+                exportMode=${exportMode}
+              />
             </div>
-            <${RichText}
-              className="notes-box ruled-fill"
-              value=${data.cause}
-              onChange=${(v) => onChange("cause", v)}
-              multiline=${true}
-              disabled=${disabled}
-              exportMode=${exportMode}
-            />
           </div>
-        </div>
-
-        <div class="diag-sub">
-          <div class="diag-label">Recommendation</div>
-          <div class="notes-lined-wrap diag-short-wrap">
-            <div class="notes-lines">
-              ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
-            </div>
-            <${RichText}
-              className="notes-box ruled-fill"
-              value=${data.recommendation}
-              onChange=${(v) => onChange("recommendation", v)}
-              multiline=${true}
-              disabled=${disabled}
-              exportMode=${exportMode}
-            />
-          </div>
-        </div>
-
-        <div class="diag-sub">
-          <div class="diag-label">Diagnostic time</div>
-          <table class="diag-time">
-            <thead>
-              <tr><th>Date</th><th>Hours</th><th>What was done</th></tr>
-            </thead>
-            <tbody>
-              ${data.timeLog.map(
-                (row, i) => html`
-                  <tr key=${i}>
-                    <td>
-                      <${CellInput} value=${row.date} disabled=${disabled} exportMode=${exportMode}
-                        onChange=${(v) => setRow("timeLog", i, "date", v)} />
-                    </td>
-                    <td>
-                      <${CellInput} value=${row.hours} disabled=${disabled} exportMode=${exportMode}
-                        onChange=${(v) => setRow("timeLog", i, "hours", v)} />
-                    </td>
-                    <td>
-                      <${CellInput} value=${row.note} disabled=${disabled} exportMode=${exportMode}
-                        onChange=${(v) => setRow("timeLog", i, "note", v)} />
-                    </td>
-                  </tr>
-                `
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        `
+      )}
     </div>
 
     ${sections.faultCodes &&
@@ -1290,11 +1233,24 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // the oil bar, the logbook panel and the 248px notes box, so it fits ONE of
   // them, not both: diagnostics + quote + fault codes measured 1380px against
   // the 1123px budget. Whatever doesn't fit goes to a sheet of its own.
-  const page1HasRoom = !sections.fluids && !sections.preService;
+  // Fault codes only exist inside the diagnostics section, so they only cost
+  // page space when both are on. Eight code rows plus the three writing boxes
+  // is more than page 1 can carry on top of the header, the oil bar and the
+  // notes box — measured at 1323px — so their presence pushes diagnostics
+  // onto a sheet of its own.
+  const codesOnCard = sections.diagnostics && sections.faultCodes;
+  const page1HasRoom = !sections.fluids && !sections.preService && !codesOnCard;
   const diagOnPage1 = sections.diagnostics && page1HasRoom;
   const quoteOnPage1 = sections.quote && page1HasRoom && !sections.diagnostics;
   const extrasPageUsed =
     (sections.diagnostics && !diagOnPage1) || (sections.quote && !quoteOnPage1);
+
+  // Photo pages carry on from however many sheets actually precede them.
+  // Hardcoding "Page 3" was already wrong once page 2 could disappear, and
+  // the diagnostics sheet makes it wrong again. Must stay below
+  // extrasPageUsed — declared above it this hits the temporal dead zone and
+  // blanks the whole card.
+  const sheetsBeforePhotos = 1 + (page2Used ? 1 : 0) + (extrasPageUsed ? 1 : 0);
 
   const updateHeader = (key, value) => {
     setHeader((prev) => ({ ...prev, [key]: value }));
@@ -1557,10 +1513,14 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       // Filtered because page 2 is not rendered at all when every one of its
       // sections is switched off — a diagnosis-only card is genuinely one
       // page, and html2canvas would throw on the null ref.
+      // Must match the on-screen order: page 1, page 2, then the diagnostics
+      // /quote sheet. Filtered because either of the last two can be absent —
+      // page 2 isn't rendered when all its sections are off, and
+      // html2canvas would throw on the null ref.
       const pages = [
         page1Ref.current,
-        diagPageRef.current,
         page2Ref.current,
+        diagPageRef.current,
         ...photoPageRefs.current.slice(0, photoPageCount),
       ].filter(Boolean);
       for (let i = 0; i < pages.length; i++) {
@@ -1972,35 +1932,6 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
           </div>
         </section>
 
-        ${extrasPageUsed &&
-        html`
-        <section class="page" id="pagediag" ref=${diagPageRef}>
-          <div class="page-label">${sections.diagnostics && !diagOnPage1 ? "Diagnostics" : "Quote"}</div>
-          ${sections.diagnostics &&
-          !diagOnPage1 &&
-          html`<${DiagnosticsSection}
-            data=${diagnostics}
-            sections=${sections}
-            onChange=${updateDiagnostics}
-            onToggle=${toggleSection}
-            disabled=${locked}
-            exportMode=${exportMode}
-          />`}
-          ${sections.quote &&
-          !quoteOnPage1 &&
-          html`<${QuoteSection}
-            quote=${quote}
-            header=${header}
-            diagnostics=${diagnostics}
-            sections=${sections}
-            onChange=${updateQuote}
-            onToggle=${toggleSection}
-            disabled=${locked}
-            exportMode=${exportMode}
-          />`}
-        </section>
-        `}
-
         ${page2Used &&
         html`
         <section class="page" id="page2" ref=${page2Ref}>
@@ -2133,6 +2064,37 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         </section>
         `}
 
+        ${/* After page 2, not before it: the service pages are the running
+              order of the job and diagnostics is the write-up that follows. */ ""}
+        ${extrasPageUsed &&
+        html`
+        <section class="page" id="pagediag" ref=${diagPageRef}>
+          <div class="page-label">${sections.diagnostics && !diagOnPage1 ? "Diagnostics" : "Quote"}</div>
+          ${sections.diagnostics &&
+          !diagOnPage1 &&
+          html`<${DiagnosticsSection}
+            data=${diagnostics}
+            sections=${sections}
+            onChange=${updateDiagnostics}
+            onToggle=${toggleSection}
+            disabled=${locked}
+            exportMode=${exportMode}
+          />`}
+          ${sections.quote &&
+          !quoteOnPage1 &&
+          html`<${QuoteSection}
+            quote=${quote}
+            header=${header}
+            diagnostics=${diagnostics}
+            sections=${sections}
+            onChange=${updateQuote}
+            onToggle=${toggleSection}
+            disabled=${locked}
+            exportMode=${exportMode}
+          />`}
+        </section>
+        `}
+
         <input
           type="file"
           accept="image/*"
@@ -2161,7 +2123,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                   photoPageRefs.current[pageIndex] = el;
                 }}
               >
-                <div class="page-label">Page ${3 + pageIndex}</div>
+                <div class="page-label">Page ${sheetsBeforePhotos + pageIndex + 1}</div>
                 <div class="section-title">Photos</div>
                 <div class="photo-grid">
                   ${pagePhotos.map(
