@@ -9,6 +9,39 @@
 <link rel="icon" href="./icons/icon-192.png" />
 <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 <link rel="stylesheet" href="./styles.css" />
+<script>
+  // Escape hatch: opening the app with ?reset=1 tears out the service worker
+  // and every cache, then reloads clean.
+  //
+  // Needed because the worker is cache-first for every file, so a device that
+  // somehow fails to pick up a new worker will serve the old app forever with
+  // no way out from inside the UI. A query string the old cache has never
+  // seen is a guaranteed miss, so this file is always fetched fresh and this
+  // script always runs -- which is what makes it work even when everything
+  // else on the device is stale.
+  //
+  // Runs in <head>, before any app script, so nothing stale gets a chance to
+  // render first.
+  if (location.search.indexOf("reset=1") > -1 && "serviceWorker" in navigator) {
+    document.documentElement.style.visibility = "hidden";
+    (function () {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        })
+        .then(function () { return caches.keys(); })
+        .then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        })
+        .then(function () {
+          // Back to the plain URL so the reset doesn't run again on reload.
+          location.replace(location.pathname);
+        })
+        .catch(function () { location.replace(location.pathname); });
+    })();
+  }
+</script>
 </head>
 <body>
 <div id="root">Loading job card&hellip;</div>
@@ -71,6 +104,24 @@
       });
     });
   }
+
+  // Which version is this device ACTUALLY running? Without it, "I still see
+  // the old one" and "the deploy didn't work" are indistinguishable from the
+  // outside, and both have cost real time. Read from the live cache name
+  // rather than a hardcoded string, so it cannot drift out of step with what
+  // is really installed.
+  window.addEventListener("load", function () {
+    if (!("caches" in window)) return;
+    caches.keys().then(function (keys) {
+      var v = keys.filter(function (k) { return k.indexOf("job-card-") === 0; })[0];
+      var tag = document.createElement("div");
+      tag.className = "version-tag no-print";
+      tag.textContent = v ? v.replace("job-card-", "") : "not cached";
+      tag.title = "App version on this device. Tap to force a clean reload.";
+      tag.onclick = function () { location.href = location.pathname + "?reset=1"; };
+      document.body.appendChild(tag);
+    });
+  });
 </script>
 </body>
 </html>

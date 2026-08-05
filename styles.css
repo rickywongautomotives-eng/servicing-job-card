@@ -1326,6 +1326,31 @@ input.office-written[type="checkbox"] {
 .diag-codes td:first-child { width: 18%; }
 .diag-codes td:last-child { width: 20%; }
 
+/* Small, permanent "what am I running" stamp. Deliberately unobtrusive but
+   always visible, and tapping it forces a clean reload. */
+.version-tag {
+  position: fixed;
+  right: 6px;
+  bottom: 6px;
+  z-index: 60;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.version-tag:hover {
+  opacity: 1;
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
 /* ---------- Quote ---------- */
 
 .quote-table {
