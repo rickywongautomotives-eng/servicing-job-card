@@ -1067,16 +1067,8 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
       )}
     </div>
 
-    ${sections.faultCodes &&
-    html`
-      <${SectionTitle}
-        label="Fault Codes"
-        sectionId="faultCodes"
-        sections=${sections}
-        onToggle=${onToggle}
-        exportMode=${exportMode}
-      />
-      <table class="diag-codes">
+    <div class="section-title"><span>Fault Codes</span></div>
+    <table class="diag-codes">
         <thead>
           <tr><th>Code</th><th>Description</th><th>Status</th></tr>
         </thead>
@@ -1099,9 +1091,8 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
               </tr>
             `
           )}
-        </tbody>
-      </table>
-    `}
+      </tbody>
+    </table>
   `;
 }
 

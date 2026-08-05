@@ -1270,12 +1270,15 @@ input.office-written[type="checkbox"] {
   min-height: 220px;
 }
 
-/* Exactly six 24px lines with nothing wasted: 1px border + 6px top padding
-   + (6 x 24) = 151. Keep this in step with DIAGNOSIS_LINE_INDEXES in
-   config.js — if the box is taller than the blank lines pre-filled into it,
-   the extra lines cannot be clicked into and leave a dead gap. */
+/* Exactly six 24px writing lines: 1px top border + 6px top padding +
+   (6 x 24) + 1px bottom border = 152. At 151 the box's content area was one
+   pixel short of the sixth rule, so overflow:hidden clipped it — five lines
+   drawn and a dead-looking gap under them, even though the sixth was
+   typable. The sixth rule now lands flush on the box's own bottom border, so
+   the border doubles as that line, which is what page 1's ten-line box has
+   always done. Keep in step with DIAGNOSIS_LINE_INDEXES in config.js. */
 .notes-lined-wrap.diag-short-wrap {
-  height: 151px;
+  height: 152px;
   flex: 0 0 auto;
 }
 

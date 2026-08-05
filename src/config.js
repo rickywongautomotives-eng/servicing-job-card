@@ -332,16 +332,11 @@ var SECTION_DEFS = [
       return hasInk(d.findings) || hasInk(d.cause) || hasInk(d.recommendation);
     },
   },
-  {
-    id: "faultCodes",
-    label: "Fault Codes",
-    default: false,
-    hasContent: function (s) {
-      return ((s.diagnostics || {}).faultCodes || []).some(function (r) {
-        return (r.code || "").trim() || (r.description || "").trim() || (r.status || "").trim();
-      });
-    },
-  },
+  // Fault codes are deliberately NOT a section of their own. They were, and
+  // the "+ Fault Codes" chip did nothing when pressed: the table only exists
+  // inside the diagnostics section, so switching it on with diagnostics off
+  // flipped a flag and rendered nothing. They belong to the diagnosis and now
+  // come and go with it.
   {
     id: "quote",
     label: "Quote",
