@@ -346,31 +346,45 @@ function collectCategories(node, out) {
 // only ever fetching filters and oil.
 let lastCategoryProbe = null;
 
-// /parts/categories answers with an HTML fragment, not JSON -- the first
-// attempt at discovery assumed JSON, hit "Unexpected token '<'", and the
-// whole lookup quietly fell back to Filters & Oil. The ids are in the
-// markup, so pull every "cat/<id>" reference and any data-category
-// attribute, pairing each with whatever readable text sits nearby so the
-// name filter still applies.
+// /parts/categories answers with an HTML fragment, not JSON. The real markup
+// (captured via the categoryProbe log, 2026-08-12) is a Bootstrap accordion
+// with no hrefs at all:
+//
+//   <div class="card-header" id='level-1-103'>
+//     <button ... data-target='.collapse103' ...>
+//       <span>Rapid Service</span>
+//
+// so the id lives in level-1-<id> and the name in the first <span> after it.
+// level-1 anchors to TOP-level categories only -- sub-categories are deeper
+// levels and the /cat/{id}/parts endpoint rejects their ids. The first
+// version of this parser looked for cat/<id> links, matched nothing, and the
+// lookup quietly stayed on Rapid Service alone.
+//
+// Note the mixed quoting is the site's own (id='...' but class="..."), hence
+// ['"] on every attribute.
 function categoriesFromHtml(html) {
   const found = [];
   const seen = new Set();
-
-  // <a ... href="...cat/104/..." ...>Brakes</a> and variants; also
-  // data-categorycode="104" data-categoryname="Brakes".
-  const link = /(?:cat\/(\d{1,4})\b|data-category(?:id|code)="(\d{1,4})")[^>]*>([^<]{0,80})</gi;
   let m;
-  while ((m = link.exec(html))) {
-    const id = m[1] || m[2];
-    const name = (m[3] || "").replace(/\s+/g, " ").trim();
-    if (!id || seen.has(id)) continue;
+
+  const accordion = /id=['"]level-1-(\d{1,4})['"][\s\S]{0,400}?<span[^>]*>\s*([^<]{1,80}?)\s*<\/span>/gi;
+  while ((m = accordion.exec(html))) {
+    const id = m[1];
+    if (seen.has(id)) continue;
     seen.add(id);
-    found.push({ id, name });
+    found.push({ id, name: m[2].replace(/\s+/g, " ").trim() });
   }
 
-  // Fallback shapes: value="104">Brakes</option>, or id and name in sibling
-  // attributes with the text elsewhere. Anything already seen is skipped.
-  const attr = /value="(\d{1,4})"[^>]*>([^<]{1,80})</gi;
+  // Older shapes kept as fallbacks in case the fragment is ever reworked:
+  // cat/<id> hrefs, data-category attributes, <option value="...">.
+  const link = /(?:cat\/(\d{1,4})\b|data-category(?:id|code)=['"](\d{1,4})['"])[^>]*>([^<]{0,80})</gi;
+  while ((m = link.exec(html))) {
+    const id = m[1] || m[2];
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    found.push({ id, name: (m[3] || "").replace(/\s+/g, " ").trim() });
+  }
+  const attr = /value=['"](\d{1,4})['"][^>]*>([^<]{1,80})</gi;
   while ((m = attr.exec(html))) {
     const id = m[1];
     if (seen.has(id)) continue;
