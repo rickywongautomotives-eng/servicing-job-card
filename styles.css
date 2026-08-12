@@ -1359,6 +1359,47 @@ input.office-written[type="checkbox"] {
   border-color: var(--ink);
 }
 
+/* ---------- Rego lookup (Burson EzyParts) ---------- */
+
+/* Sits inside the registration field's own box, so it costs no grid cell and
+   no extra page height. Kept short enough not to squeeze the input. */
+.rego-lookup-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 -3px 0 4px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.rego-lookup-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rego-lookup-status {
+  margin: 4px 0 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--line-strong);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.rego-lookup-status.is-error {
+  color: var(--danger, #c0271d);
+  border-color: currentColor;
+}
+
 /* ---------- Quote ---------- */
 
 .quote-table {

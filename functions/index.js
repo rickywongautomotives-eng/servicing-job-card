@@ -9,9 +9,18 @@
 // parsing rules without re-confirming against a real booking.
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
 const { google } = require("googleapis");
+const ezyparts = require("./ezyparts");
+
+// Ricky's EzyParts sign-in, held in Secret Manager rather than in this file.
+// Set with:  firebase functions:secrets:set EZYPARTS_USERNAME
+// They are never read back into the repo, the console or a log line.
+const EZYPARTS_USERNAME = defineSecret("EZYPARTS_USERNAME");
+const EZYPARTS_PASSWORD = defineSecret("EZYPARTS_PASSWORD");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -420,6 +429,61 @@ function buildPpiJob(parsed, dateStr) {
 }
 
 const SERVICE_ACCOUNT_EMAIL = "firebase-adminsdk-fbsvc@ams-service-job-card.iam.gserviceaccount.com";
+
+// Same allowlist as firestore.rules. Kept in step by hand -- if a technician
+// is added there, add them here too, or their rego lookups will fail while
+// the rest of the app works, which is a confusing way to find out.
+const ALLOWED_EMAILS = [
+  "rickywongautomotives@gmail.com",
+  "kynan.l53@gmail.com",
+  "lanle3174@gmail.com",
+];
+
+// Rego -> vehicle + service parts, called straight from the job card.
+//
+// Runs on the server rather than in the app because it needs the EzyParts
+// password, and anything the browser can see is public. It also means the
+// lookup works from any device with internet -- tablet, phone, office
+// desktop -- without EzyParts being signed into that device.
+exports.lookupRego = onCall(
+  {
+    region: "australia-southeast1",
+    secrets: [EZYPARTS_USERNAME, EZYPARTS_PASSWORD],
+    timeoutSeconds: 60,
+    // One lookup is a handful of requests to someone else's system. Cap the
+    // fleet so a runaway loop in the app cannot hammer Burson.
+    maxInstances: 3,
+  },
+  async (request) => {
+    const email = request.auth && request.auth.token && request.auth.token.email;
+    if (!email || !ALLOWED_EMAILS.includes(email)) {
+      throw new HttpsError("permission-denied", "Not a workshop account");
+    }
+
+    const rego = (request.data && request.data.rego) || "";
+    const state = (request.data && request.data.state) || "VIC";
+    if (!String(rego).trim()) {
+      throw new HttpsError("invalid-argument", "No registration supplied");
+    }
+
+    try {
+      const result = await ezyparts.lookupRego({
+        rego,
+        state,
+        username: EZYPARTS_USERNAME.value(),
+        password: EZYPARTS_PASSWORD.value(),
+      });
+      logger.info("Rego lookup", { rego, found: result.found, by: email });
+      return result;
+    } catch (err) {
+      // Never let a lookup failure look like a broken job card -- the tech
+      // can always type the details in. Log the detail, return something the
+      // UI can show without alarming anyone.
+      logger.error("Rego lookup failed", { rego, error: err && err.message });
+      throw new HttpsError("unavailable", err && err.message ? err.message : "EzyParts lookup failed");
+    }
+  }
+);
 
 exports.prefillJobsFromCalendar = onSchedule(
   {

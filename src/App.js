@@ -466,7 +466,11 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
   `;
 }
 
-function HeaderField({ field, value, by, onChange, exportMode }) {
+// `action` renders inside the field's own box. It has to go there rather than
+// beside it: .header-group-fields is a two-column grid, so anything rendered
+// as a sibling takes a whole cell and adds a row — which pushed page 1 to
+// 1146px against its 1123px budget.
+function HeaderField({ field, value, by, onChange, exportMode, action }) {
   const wide = WIDE_HEADER_FIELD_KEYS.indexOf(field.key) !== -1;
   const officeClass = by === "office" ? " office-written" : "";
   return html`
@@ -483,6 +487,7 @@ function HeaderField({ field, value, by, onChange, exportMode }) {
               autoComplete="off"
             />
           `}
+      ${!exportMode && action ? action : null}
     </label>
   `;
 }
@@ -1377,6 +1382,88 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   // can be sitting in a section that isn't on the card, so hiding something
   // with entries in it asks first, and anything still hidden is flagged
   // on screen by SectionAdder.
+  // Rego lookup. Only ever ADDS to empty fields — never overwrites something
+  // a person has already typed, because the tech standing at the car is a
+  // better source than a parts catalogue, and silently replacing their entry
+  // would be the kind of thing you only notice after the job is invoiced.
+  const [regoLookup, setRegoLookup] = React.useState({ busy: false, error: "", filled: [] });
+
+  async function runRegoLookup() {
+    const rego = (header.registration || "").trim();
+    if (!rego) return;
+    setRegoLookup({ busy: true, error: "", filled: [] });
+    try {
+      const res = await lookupRego(rego, "VIC");
+      if (!res || !res.found) {
+        setRegoLookup({ busy: false, error: (res && res.message) || "No vehicle found for that rego", filled: [] });
+        return;
+      }
+      const filled = [];
+      const v = res.vehicle || {};
+
+      const headerPatch = {};
+      const maybe = (key, value) => {
+        if (!value) return;
+        if ((header[key] || "").trim()) return;
+        headerPatch[key] = value;
+        filled.push(key);
+      };
+      maybe("vin", v.vin);
+      maybe("make", v.make);
+      maybe("model", v.model);
+      // EzyParts has no engine NUMBER (that is stamped on the block), so the
+      // engine code goes here instead — Ricky's call: on its own it already
+      // tells a technician most of what they need.
+      maybe("engineNumber", (v.engine || "").split(/\s+/)[1] || v.engine);
+      if (Object.keys(headerPatch).length) {
+        setHeader((prev) => Object.assign({}, prev, headerPatch));
+        setHeaderBy((prev) =>
+          Object.assign({}, prev, Object.fromEntries(Object.keys(headerPatch).map((k) => [k, role])))
+        );
+      }
+
+      // Parts land as the value beside each checklist item, NOT ticked — what
+      // gets fitted is the technician's decision, not the catalogue's.
+      const find = (re) => (res.parts || []).find((p) => re.test(p.category || ""));
+      const oilFilter = find(/^oil filter/i);
+      const airFilter = find(/^air filter/i);
+      const cabinFilter = find(/cabin/i);
+      const engineOil = find(/engine oil/i);
+
+      const oilPatch = {};
+      if (oilFilter && !(oilSpec.oilFilter || "").trim()) {
+        oilPatch.oilFilter = oilFilter.code;
+        filled.push("oil filter");
+      }
+      if (engineOil && !(oilSpec.oilGrade || "").trim()) {
+        oilPatch.oilGrade = [engineOil.code, engineOil.notes].filter(Boolean).join(" ");
+        filled.push("oil grade");
+      }
+      if (Object.keys(oilPatch).length) {
+        setOilSpec((prev) => Object.assign({}, prev, oilPatch));
+        setOilSpecBy((prev) =>
+          Object.assign({}, prev, Object.fromEntries(Object.keys(oilPatch).map((k) => [k, role])))
+        );
+      }
+
+      const fluidPatch = {};
+      const setFluidValue = (key, part, label) => {
+        if (!part) return;
+        if ((fluids[key] && (fluids[key].value || "").trim())) return;
+        fluidPatch[key] = Object.assign({}, fluids[key], { value: part.code, valueBy: role });
+        filled.push(label);
+      };
+      setFluidValue("airFilter", airFilter, "air filter");
+      setFluidValue("cabinFilter", cabinFilter, "cabin filter");
+      if (Object.keys(fluidPatch).length) setFluids((prev) => Object.assign({}, prev, fluidPatch));
+
+      setRegoLookup({ busy: false, error: filled.length ? "" : "Nothing to fill — those fields already have values", filled });
+    } catch (err) {
+      console.error(err);
+      setRegoLookup({ busy: false, error: (err && err.message) || "Lookup failed", filled: [] });
+    }
+  }
+
   function updateDiagnostics(key, value) {
     setDiagnostics((prev) => Object.assign({}, prev, { [key]: value }));
   }
@@ -1728,6 +1815,20 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                   <div class="header-group-fields">
                     ${group.keys.map((key) => {
                       const f = HEADER_FIELDS.find((hf) => hf.key === key);
+                      const action =
+                        f.key === "registration"
+                          ? html`
+                              <button
+                                type="button"
+                                class="rego-lookup-btn"
+                                onClick=${runRegoLookup}
+                                disabled=${regoLookup.busy || locked || !(header.registration || "").trim()}
+                                title="Fill the vehicle details from Burson EzyParts"
+                              >
+                                ${regoLookup.busy ? "…" : "Look up"}
+                              </button>
+                            `
+                          : null;
                       return html`
                         <${HeaderField}
                           key=${f.key}
@@ -1736,6 +1837,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                           by=${headerBy[f.key]}
                           onChange=${updateHeader}
                           exportMode=${exportMode}
+                          action=${action}
                         />
                       `;
                     })}
@@ -1744,6 +1846,16 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               `
             )}
           </div>
+
+          ${!exportMode &&
+          (regoLookup.error || regoLookup.filled.length > 0) &&
+          html`
+            <div class=${"rego-lookup-status no-print" + (regoLookup.error ? " is-error" : "")}>
+              ${regoLookup.error
+                ? regoLookup.error
+                : "Filled from EzyParts: " + regoLookup.filled.join(", ")}
+            </div>
+          `}
 
           <div class="oil-spec-bar">
             ${OIL_SPEC_FIELDS.map(

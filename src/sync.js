@@ -199,6 +199,22 @@ function uploadJobPdf(jobId, blob) {
   });
 }
 
+// Rego -> vehicle details and service parts, via Burson EzyParts.
+//
+// Goes through a Cloud Function rather than calling EzyParts from here,
+// because it needs the EzyParts password and anything this file can see is
+// public. The upside is it works from any device with internet, whether or
+// not EzyParts is signed in on that device.
+function lookupRego(rego, state) {
+  return firebase
+    .app()
+    .functions("australia-southeast1")
+    .httpsCallable("lookupRego")({ rego: rego, state: state || "VIC" })
+    .then(function (res) {
+      return res.data;
+    });
+}
+
 // Permanent record of an approved job, written on Approve just before the
 // job document itself is deleted.
 //
