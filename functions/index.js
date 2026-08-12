@@ -484,6 +484,8 @@ exports.lookupRego = onCall(
         categoryNames: (result.diagnostics || {}).categoryNames,
         categoriesTried: (result.diagnostics || {}).categoriesTried,
         categoriesFailed: (result.diagnostics || {}).failed,
+        categoryProbe: JSON.stringify((result.diagnostics || {}).categoryProbe || null).slice(0, 1500),
+        categoryProbeError: (result.diagnostics || {}).categoryProbeError,
       });
       return result;
     } catch (err) {

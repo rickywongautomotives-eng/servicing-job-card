@@ -322,7 +322,10 @@ async function addPrices(jar, parts) {
 // site's own category list calls them. Discovered rather than hardcoded
 // because the numeric ids are undocumented and would be silently wrong if
 // Burson ever renumbered them.
-const SERVICE_CATEGORY_NAMES = /filter|oil|belt|ignition|start|cool|brake|clutch|transmission|driveline|service/i;
+// Matched against the workbench sidebar's own headings: Filters & Oil,
+// Brakes, Belts & Timing Parts, Cooling, Ignition Start & Charge, Clutch &
+// Transmission, Shafts Axles & Wheels (diff oils), Rapid Service.
+const SERVICE_CATEGORY_NAMES = /filter|oil|belt|ignition|start|cool|brake|clutch|transmission|driveline|service|axle|shaft|diff/i;
 
 function collectCategories(node, out) {
   if (!node || out.length > 40) return;
@@ -338,10 +341,67 @@ function collectCategories(node, out) {
   });
 }
 
-async function serviceCategoryIds(jar) {
-  const payload = await getJson(jar, "/parts/categories");
+// Set by serviceCategoryIds so the caller can log what the category endpoint
+// actually returned. Discovery failing silently is how the lookup ended up
+// only ever fetching filters and oil.
+let lastCategoryProbe = null;
+
+// /parts/categories answers with an HTML fragment, not JSON -- the first
+// attempt at discovery assumed JSON, hit "Unexpected token '<'", and the
+// whole lookup quietly fell back to Filters & Oil. The ids are in the
+// markup, so pull every "cat/<id>" reference and any data-category
+// attribute, pairing each with whatever readable text sits nearby so the
+// name filter still applies.
+function categoriesFromHtml(html) {
   const found = [];
-  collectCategories(payload, found);
+  const seen = new Set();
+
+  // <a ... href="...cat/104/..." ...>Brakes</a> and variants; also
+  // data-categorycode="104" data-categoryname="Brakes".
+  const link = /(?:cat\/(\d{1,4})\b|data-category(?:id|code)="(\d{1,4})")[^>]*>([^<]{0,80})</gi;
+  let m;
+  while ((m = link.exec(html))) {
+    const id = m[1] || m[2];
+    const name = (m[3] || "").replace(/\s+/g, " ").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    found.push({ id, name });
+  }
+
+  // Fallback shapes: value="104">Brakes</option>, or id and name in sibling
+  // attributes with the text elsewhere. Anything already seen is skipped.
+  const attr = /value="(\d{1,4})"[^>]*>([^<]{1,80})</gi;
+  while ((m = attr.exec(html))) {
+    const id = m[1];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    found.push({ id, name: (m[2] || "").replace(/\s+/g, " ").trim() });
+  }
+
+  return found;
+}
+
+async function serviceCategoryIds(jar) {
+  const res = await request(jar, BASE + "/parts/categories", {
+    json: true,
+    headers: { Accept: "application/json, text/html;q=0.9, */*;q=0.8" },
+  });
+  if (!res.ok) throw new Error("/parts/categories returned " + res.status);
+  const raw = await res.text();
+
+  let found = [];
+  try {
+    const payload = JSON.parse(raw);
+    collectCategories(payload, found);
+  } catch (err) {
+    found = categoriesFromHtml(raw);
+  }
+
+  lastCategoryProbe = {
+    responseStart: raw.slice(0, 400).replace(/\s+/g, " "),
+    collected: found.length,
+    sample: found.slice(0, 30),
+  };
 
   // Only top-level ids are valid for the /cat/{id}/parts call, and those are
   // the short numeric ones -- sub-categories carry longer ids (10305 under
@@ -351,9 +411,10 @@ async function serviceCategoryIds(jar) {
     .map((c) => c.id);
 
   const unique = Array.from(new Set(SERVICE_CATEGORIES.map(String).concat(ids)));
-  // A service lookup should stay under a second or two; a dozen categories
-  // is already more than a service needs.
-  return unique.slice(0, 8);
+  // Ten sequential fetches is a few seconds against a 60s budget, and more
+  // than a service needs; anything past that is a sign the name filter has
+  // started matching noise.
+  return unique.slice(0, 10);
 }
 
 // The one thing the rest of the app calls.
@@ -384,10 +445,11 @@ async function lookupRego({ rego, state, username, password }) {
   // best-effort -- if the category list ever changes shape, the filters still
   // arrive and the card is still better off than it was.
   let categoryIds = SERVICE_CATEGORIES.slice();
+  let categoryProbeError = null;
   try {
     categoryIds = await serviceCategoryIds(jar);
   } catch (err) {
-    // keep the fallback
+    categoryProbeError = (err && err.message) || String(err);
   }
 
   let fields = {};
@@ -395,7 +457,13 @@ async function lookupRego({ rego, state, username, password }) {
   // Kept so a caller can log which categories answered and what headings they
   // carried. Without it, "row X did not fill" is unanswerable -- the category
   // could be missing, named differently, or simply not stocked for that car.
-  const diagnostics = { categoriesTried: categoryIds.slice(), categoryNames: [], failed: [] };
+  const diagnostics = {
+    categoriesTried: categoryIds.slice(),
+    categoryNames: [],
+    failed: [],
+    categoryProbe: lastCategoryProbe,
+    categoryProbeError,
+  };
 
   for (const catId of categoryIds) {
     try {
@@ -453,4 +521,4 @@ async function lookupRego({ rego, state, username, password }) {
   };
 }
 
-module.exports = { lookupRego, pickParts, preferBrand, extractCsrf, engineCode, FIELD_RULES };
+module.exports = { lookupRego, pickParts, preferBrand, extractCsrf, engineCode, categoriesFromHtml, FIELD_RULES };
