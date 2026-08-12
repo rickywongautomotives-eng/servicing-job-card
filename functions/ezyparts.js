@@ -37,10 +37,14 @@ const SERVICE_CATEGORIES = [103];
 // job card, so one is chosen and the rest dropped. All of this is Ricky's
 // call, not a guess:
 //
-//   Filters  Ryco, and the BASE line only -- "Ryco Premium" (R2828PST) is a
-//            different product to R2828P and he only wants the plain one.
-//            Hence the anchored /^ryco$/ rather than /^ryco/. Wesfil is the
-//            fallback because Ryco do not list every fuel filter.
+//   Filters  Ryco, BASE line preferred -- "Ryco Premium" (R2828PST) is a
+//            different product to R2828P and he wants the plain one where
+//            both exist, hence the anchored /^ryco$/ first.
+//            But Ryco only make a Premium in some lines (cabin filters are
+//            usually the N99 RCA...M and nothing else), and skipping straight
+//            to Wesfil there was wrong -- it put a Wesfil cabin filter on a
+//            car Ryco did stock. So any Ryco beats a non-Ryco; Wesfil is the
+//            fallback only when Ryco list nothing at all.
 //   Oils     Penrite, always.
 //   Belts    Dayco by default, but genuinely brand-agnostic: a 6PK1165 Dayco
 //            and a 6PK1165 Gates are the same belt, so any brand will do.
@@ -50,7 +54,7 @@ const SERVICE_CATEGORIES = [103];
 // whatever is listed rather than leaving the row blank -- a number in the
 // wrong brand is still a number, and a blank row helps nobody.
 const BRAND_RULES = {
-  filter: [/^ryco$/i, /^wesfil$/i],
+  filter: [/^ryco$/i, /^ryco\b/i, /^wesfil$/i],
   oil: [/^penrite$/i],
   belt: [/^dayco$/i],
   plug: [/^ngk$/i],
@@ -191,16 +195,27 @@ function engineCode(engine) {
   const s = String(engine || "").trim();
   if (!s) return "";
 
-  const looksLikeCode = (t) =>
-    t.length >= 3 &&
-    /[A-Za-z]/.test(t) &&
-    /\d/.test(t) &&
-    !/^[\d.]+L$/i.test(t) && // displacement, "2.0L"
-    !/^\d+v$/i.test(t); // valve count, "16v"
+  // Everything in these strings that is NOT an engine code. Written as a
+  // denylist because requiring a digit was wrong: VW/Audi codes are pure
+  // letters (CXDA, CJSA, DKTA), and demanding a digit skipped straight past
+  // them and picked up "{162kW}" instead.
+  const isNoise = (t) =>
+    /^[\d.]+L$/i.test(t) || // displacement, "2.0L"
+    /^\d+v$/i.test(t) || // valve count, "16v"
+    /^\d+kw$/i.test(t) || // power
+    /[{}]/.test(t) || // "{190kW}"
+    /^[IVWHFBRL]\d{1,2}$/i.test(t) || // cylinder layout, "I4" "V8" "W12"
+    /^(pet|petrol|dsl|diesel|lpg|cng|hyb|hybrid|elec|electric)$/i.test(t) ||
+    /^(dohc|sohc|ohv|ohc|vvt|vct|vtec|mpfi|efi|tbi|gdi)$/i.test(t) ||
+    /^(turbo|s\/c|i\/c|t\/c|direct|inj|injection|chain|belt|gear)$/i.test(t) ||
+    /^(auto|man|awd|rwd|fwd|4wd|2wd)$/i.test(t) ||
+    /^(gen|mk|series|type|ser)$/i.test(t); // Holden's "GEN IV LS2"
+
+  const looksLikeCode = (t) => t.length >= 3 && /[A-Za-z]/.test(t) && !isNoise(t);
 
   // The word after displacement and fuel is the code on most vehicles, but
-  // not all: Holden's "5.7L PET GEN IV LS2 V8" puts "GEN" there, so only
-  // accept the positional guess when it actually looks like a code.
+  // not all -- Holden's "5.7L PET GEN IV LS2 V8" puts "GEN" in that slot --
+  // so the positional guess is only taken when it survives the noise check.
   const positional = s.match(/^[\d.]+\s*L\s+\S+\s+(\S+)/i);
   if (positional && looksLikeCode(positional[1])) return positional[1];
 
@@ -377,16 +392,24 @@ async function lookupRego({ rego, state, username, password }) {
 
   let fields = {};
   let parts = [];
+  // Kept so a caller can log which categories answered and what headings they
+  // carried. Without it, "row X did not fill" is unanswerable -- the category
+  // could be missing, named differently, or simply not stocked for that car.
+  const diagnostics = { categoriesTried: categoryIds.slice(), categoryNames: [], failed: [] };
+
   for (const catId of categoryIds) {
     try {
       const payload = await getJson(jar, "/vehicle/" + v.id + "/cat/" + catId + "/parts");
       const picked = pickParts(payload);
       parts = parts.concat(picked.all);
+      (payload.categories || []).forEach((c) => {
+        if (c.name && (c.parts || []).length) diagnostics.categoryNames.push(c.name);
+      });
       // Earlier categories win, so the order of SERVICE_CATEGORIES matters:
       // filters and oil first, since that is where the service items live.
       fields = Object.assign({}, picked.fields, fields);
     } catch (err) {
-      // One dud category should not cost the whole lookup.
+      diagnostics.failed.push(String(catId));
     }
   }
 
@@ -426,6 +449,7 @@ async function lookupRego({ rego, state, username, password }) {
     fields,
     // Everything found, for anything that wants to offer alternatives later.
     parts,
+    diagnostics,
   };
 }
 

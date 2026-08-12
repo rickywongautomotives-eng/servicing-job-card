@@ -473,7 +473,18 @@ exports.lookupRego = onCall(
         username: EZYPARTS_USERNAME.value(),
         password: EZYPARTS_PASSWORD.value(),
       });
-      logger.info("Rego lookup", { rego, found: result.found, by: email });
+      // Logged so "row X did not fill" can be answered from the logs rather
+      // than guessed at: which categories answered, what headings they used,
+      // and which job card rows were matched.
+      logger.info("Rego lookup", {
+        rego,
+        found: result.found,
+        by: email,
+        filledFields: Object.keys(result.fields || {}),
+        categoryNames: (result.diagnostics || {}).categoryNames,
+        categoriesTried: (result.diagnostics || {}).categoriesTried,
+        categoriesFailed: (result.diagnostics || {}).failed,
+      });
       return result;
     } catch (err) {
       // Never let a lookup failure look like a broken job card -- the tech
