@@ -1423,20 +1423,23 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       }
 
       // Parts land as the value beside each checklist item, NOT ticked — what
-      // gets fitted is the technician's decision, not the catalogue's.
-      const find = (re) => (res.parts || []).find((p) => re.test(p.category || ""));
-      const oilFilter = find(/^oil filter/i);
-      const airFilter = find(/^air filter/i);
-      const cabinFilter = find(/cabin/i);
-      const engineOil = find(/engine oil/i);
+      // actually gets fitted stays the technician's decision, not the
+      // catalogue's. The brand choice per row (Ryco base filters, Penrite
+      // oils, Dayco belts, NGK plugs) is made on the server; see
+      // BRAND_RULES in functions/ezyparts.js.
+      const partFields = res.fields || {};
+
+      // Oil grade carries the spec as well as the code — "HPR0 5.3L, 0W-30"
+      // is far more use on the bench than a bare product number.
+      const describe = (p) => [p.code, p.notes || p.description].filter(Boolean).join(" — ");
 
       const oilPatch = {};
-      if (oilFilter && !(oilSpec.oilFilter || "").trim()) {
-        oilPatch.oilFilter = oilFilter.code;
+      if (partFields.oilFilter && !(oilSpec.oilFilter || "").trim()) {
+        oilPatch.oilFilter = partFields.oilFilter.code;
         filled.push("oil filter");
       }
-      if (engineOil && !(oilSpec.oilGrade || "").trim()) {
-        oilPatch.oilGrade = [engineOil.code, engineOil.notes].filter(Boolean).join(" ");
+      if (partFields.oilGrade && !(oilSpec.oilGrade || "").trim()) {
+        oilPatch.oilGrade = describe(partFields.oilGrade);
         filled.push("oil grade");
       }
       if (Object.keys(oilPatch).length) {
@@ -1446,15 +1449,22 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         );
       }
 
+      // Everything else drops into the Fluids & Filters checklist. Oils get
+      // their spec alongside the code for the same reason as above; filters,
+      // plugs and belts are identified by their number alone.
+      const WITH_SPEC = ["brakeFluid", "coolant", "clutchFluid", "transCaseOil", "autoOil", "manualOil", "fDiffOil", "rDiffOil"];
       const fluidPatch = {};
-      const setFluidValue = (key, part, label) => {
-        if (!part) return;
-        if ((fluids[key] && (fluids[key].value || "").trim())) return;
-        fluidPatch[key] = Object.assign({}, fluids[key], { value: part.code, valueBy: role });
-        filled.push(label);
-      };
-      setFluidValue("airFilter", airFilter, "air filter");
-      setFluidValue("cabinFilter", cabinFilter, "cabin filter");
+      Object.keys(partFields).forEach((key) => {
+        if (key === "oilFilter" || key === "oilGrade") return;
+        if (!fluids[key]) return; // not a row on this card
+        if ((fluids[key].value || "").trim()) return; // never overwrite
+        const part = partFields[key];
+        fluidPatch[key] = Object.assign({}, fluids[key], {
+          value: WITH_SPEC.indexOf(key) !== -1 ? describe(part) : part.code,
+          valueBy: role,
+        });
+        filled.push(part.category || key);
+      });
       if (Object.keys(fluidPatch).length) setFluids((prev) => Object.assign({}, prev, fluidPatch));
 
       setRegoLookup({ busy: false, error: filled.length ? "" : "Nothing to fill — those fields already have values", filled });

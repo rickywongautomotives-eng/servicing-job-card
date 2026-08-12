@@ -27,13 +27,34 @@ const BASE = ORIGIN + "/burson/ezyparts/en/AUD";
 // live in Secret Manager; see EZYPARTS_USERNAME / EZYPARTS_PASSWORD.
 const ACCOUNT_NUMBER = "33709";
 
-// "Filters & Oil" -- the category the site itself requests for a service.
-const SERVICE_PARTS_CATEGORY = 103;
+// Top-level categories worth pulling for a service. Discovered from the
+// site's own category list; see listCategories() if these ever need
+// revisiting.
+const SERVICE_CATEGORIES = [103];
 
-// Only these two brands reach the job card. EzyParts lists five or six
-// brands per part, which is useful when you are shopping and noise when you
-// are filling in a job card. Ricky's call: stick to what the workshop fits.
-const KEEP_BRANDS = [/^ryco/i, /^penrite/i];
+// Which brand to put on the card, per kind of part. EzyParts lists five or
+// six brands for everything, which is useful when shopping and noise on a
+// job card, so one is chosen and the rest dropped. All of this is Ricky's
+// call, not a guess:
+//
+//   Filters  Ryco, and the BASE line only -- "Ryco Premium" (R2828PST) is a
+//            different product to R2828P and he only wants the plain one.
+//            Hence the anchored /^ryco$/ rather than /^ryco/. Wesfil is the
+//            fallback because Ryco do not list every fuel filter.
+//   Oils     Penrite, always.
+//   Belts    Dayco by default, but genuinely brand-agnostic: a 6PK1165 Dayco
+//            and a 6PK1165 Gates are the same belt, so any brand will do.
+//   Plugs    NGK, else whatever else is listed.
+//
+// If none of the preferred brands carry the part, preferBrand() falls back to
+// whatever is listed rather than leaving the row blank -- a number in the
+// wrong brand is still a number, and a blank row helps nobody.
+const BRAND_RULES = {
+  filter: [/^ryco$/i, /^wesfil$/i],
+  oil: [/^penrite$/i],
+  belt: [/^dayco$/i],
+  plug: [/^ngk$/i],
+};
 
 // A cookie jar just big enough for one login. Nothing here needs the
 // generality (or the dependency) of a real cookie library.
@@ -186,24 +207,69 @@ function engineCode(engine) {
   return s.split(/\s+/).find(looksLikeCode) || s;
 }
 
-// Flattens the parts response down to the handful of lines a job card wants,
-// keeping only the brands the workshop actually fits.
+// Maps EzyParts' category names onto the job card's own checklist rows.
+// Matched on NAME rather than category id: the names are stable and readable
+// ("Oil Filter", "Spark Plug"), the numeric ids are not documented anywhere.
+//
+// `field` is the job card key. `kind` selects the brand preference above.
+// Engine Flush is deliberately absent -- Ricky fills that in himself.
+const FIELD_RULES = [
+  { field: "oilFilter", kind: "filter", match: /^oil filter$/i },
+  { field: "oilGrade", kind: "oil", match: /^engine oil$/i },
+  { field: "airFilter", kind: "filter", match: /^air filter$/i },
+  { field: "cabinFilter", kind: "filter", match: /cabin/i },
+  { field: "fuelFilter", kind: "filter", match: /^fuel filter$/i },
+  { field: "brakeFluid", kind: "oil", match: /brake fluid/i },
+  { field: "coolant", kind: "oil", match: /coolant|antifreeze/i },
+  { field: "clutchFluid", kind: "oil", match: /clutch fluid/i },
+  { field: "sparkPlugs", kind: "plug", match: /spark plug/i },
+  { field: "driveBelts", kind: "belt", match: /drive belt|serpentine|multi.?rib|v.?belt/i },
+  { field: "transCaseOil", kind: "oil", match: /transfer case/i },
+  { field: "autoOil", kind: "oil", match: /automatic transmission (fluid|oil)|auto trans/i },
+  { field: "manualOil", kind: "oil", match: /manual transmission (fluid|oil)|manual trans|gearbox oil/i },
+  { field: "fDiffOil", kind: "oil", match: /front diff/i },
+  { field: "rDiffOil", kind: "oil", match: /rear diff/i },
+];
+
+// Picks one part for a category, following the brand preference and falling
+// back to whatever is listed rather than leaving the row empty.
+function preferBrand(parts, kind) {
+  const rules = BRAND_RULES[kind] || [];
+  for (const re of rules) {
+    const hit = parts.find((p) => re.test((p.brand || "").trim()));
+    if (hit) return hit;
+  }
+  return parts[0] || null;
+}
+
+// Flattens every category in the response into { field: chosenPart }.
 function pickParts(partsPayload) {
-  const out = [];
+  const chosen = {};
+  const all = [];
+
   (partsPayload.categories || []).forEach((cat) => {
-    (cat.parts || []).forEach((p) => {
-      if (!KEEP_BRANDS.some((re) => re.test(p.brand || ""))) return;
-      out.push({
-        category: cat.name || "",
-        code: p.name || "",
-        brand: p.brand || "",
-        description: p.desc || "",
-        notes: p.notes || "",
-        productId: String(p.code || ""),
-      });
-    });
+    const name = (cat.name || "").trim();
+    const parts = (cat.parts || []).map((p) => ({
+      category: name,
+      code: p.name || "",
+      brand: (p.brand || "").trim(),
+      description: p.desc || "",
+      notes: p.notes || "",
+      productId: String(p.code || ""),
+    }));
+    if (!parts.length) return;
+    all.push.apply(all, parts);
+
+    const rule = FIELD_RULES.find((r) => r.match.test(name));
+    if (!rule) return;
+    // First category to claim a field wins; EzyParts sometimes lists the
+    // same part under a second heading.
+    if (chosen[rule.field]) return;
+    const pick = preferBrand(parts, rule.kind);
+    if (pick) chosen[rule.field] = pick;
   });
-  return out;
+
+  return { fields: chosen, all };
 }
 
 async function addPrices(jar, parts) {
@@ -237,6 +303,44 @@ async function addPrices(jar, parts) {
   });
 }
 
+// Category names worth fetching for a service, matched against whatever the
+// site's own category list calls them. Discovered rather than hardcoded
+// because the numeric ids are undocumented and would be silently wrong if
+// Burson ever renumbered them.
+const SERVICE_CATEGORY_NAMES = /filter|oil|belt|ignition|start|cool|brake|clutch|transmission|driveline|service/i;
+
+function collectCategories(node, out) {
+  if (!node || out.length > 40) return;
+  if (Array.isArray(node)) {
+    node.forEach((n) => collectCategories(n, out));
+    return;
+  }
+  const id = node.id || node.code || node.categoryId;
+  const name = node.name || node.title || node.label;
+  if (id != null && name) out.push({ id: String(id), name: String(name) });
+  ["children", "subCategories", "categories", "subCats"].forEach((k) => {
+    if (node[k]) collectCategories(node[k], out);
+  });
+}
+
+async function serviceCategoryIds(jar) {
+  const payload = await getJson(jar, "/parts/categories");
+  const found = [];
+  collectCategories(payload, found);
+
+  // Only top-level ids are valid for the /cat/{id}/parts call, and those are
+  // the short numeric ones -- sub-categories carry longer ids (10305 under
+  // 103) which that endpoint rejects.
+  const ids = found
+    .filter((c) => SERVICE_CATEGORY_NAMES.test(c.name) && /^\d{1,4}$/.test(c.id))
+    .map((c) => c.id);
+
+  const unique = Array.from(new Set(SERVICE_CATEGORIES.map(String).concat(ids)));
+  // A service lookup should stay under a second or two; a dozen categories
+  // is already more than a service needs.
+  return unique.slice(0, 8);
+}
+
 // The one thing the rest of the app calls.
 async function lookupRego({ rego, state, username, password }) {
   const cleanRego = String(rego || "").trim().toUpperCase();
@@ -259,13 +363,42 @@ async function lookupRego({ rego, state, username, password }) {
   // choose rather than guessing on their behalf.
   const v = vehicles[0];
 
-  let parts = [];
+  // Which categories to pull. 103 ("Filters & Oil") is known-good and covers
+  // most of a service; the rest are discovered by name so spark plugs, belts,
+  // brake fluid and the driveline oils come through too. Discovery is
+  // best-effort -- if the category list ever changes shape, the filters still
+  // arrive and the card is still better off than it was.
+  let categoryIds = SERVICE_CATEGORIES.slice();
   try {
-    const payload = await getJson(jar, "/vehicle/" + v.id + "/cat/" + SERVICE_PARTS_CATEGORY + "/parts");
-    parts = await addPrices(jar, pickParts(payload));
+    categoryIds = await serviceCategoryIds(jar);
   } catch (err) {
-    // A vehicle with no VIN is still worth returning.
-    parts = [];
+    // keep the fallback
+  }
+
+  let fields = {};
+  let parts = [];
+  for (const catId of categoryIds) {
+    try {
+      const payload = await getJson(jar, "/vehicle/" + v.id + "/cat/" + catId + "/parts");
+      const picked = pickParts(payload);
+      parts = parts.concat(picked.all);
+      // Earlier categories win, so the order of SERVICE_CATEGORIES matters:
+      // filters and oil first, since that is where the service items live.
+      fields = Object.assign({}, picked.fields, fields);
+    } catch (err) {
+      // One dud category should not cost the whole lookup.
+    }
+  }
+
+  try {
+    const pricedList = await addPrices(jar, Object.values(fields));
+    const byId = new Map(pricedList.map((p) => [p.productId, p]));
+    Object.keys(fields).forEach((k) => {
+      const priced = byId.get(fields[k].productId);
+      if (priced) fields[k] = priced;
+    });
+  } catch (err) {
+    // pricing is a bonus, never a reason to fail
   }
 
   return {
@@ -289,8 +422,11 @@ async function lookupRego({ rego, state, username, password }) {
       ezyPartsVehicleId: String(v.id || ""),
     },
     alternatives: vehicles.length > 1 ? vehicles.map((x) => ({ id: String(x.id), desc: x.lngDsc || x.desc })) : [],
+    // Keyed by job card field, ready to drop straight into the checklist.
+    fields,
+    // Everything found, for anything that wants to offer alternatives later.
     parts,
   };
 }
 
-module.exports = { lookupRego, pickParts, extractCsrf, engineCode };
+module.exports = { lookupRego, pickParts, preferBrand, extractCsrf, engineCode, FIELD_RULES };
