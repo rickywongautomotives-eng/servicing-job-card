@@ -110,10 +110,22 @@ async function login(username, password) {
   const csrf = extractCsrf(html);
   if (!csrf) throw new Error("EzyParts login page did not contain a CSRF token");
 
+  // The login form does NOT submit the username as typed. Its own script
+  // (acc.login.js) builds the real user id first:
+  //
+  //   var uid = accNo + "_" + username;  $("input#j_username").val(uid);
+  //
+  // so the account is "33709_someone", not "someone". Sending the bare
+  // username is rejected with no useful message, which is exactly what
+  // happened on the first attempt. Tolerates the secret being stored either
+  // way round.
+  const bare = String(username).trim();
+  const uid = bare.startsWith(ACCOUNT_NUMBER + "_") ? bare : ACCOUNT_NUMBER + "_" + bare;
+
   const form = new URLSearchParams({
     acc_no: ACCOUNT_NUMBER,
-    j_username: username,
-    username: username,
+    j_username: uid,
+    username: bare,
     j_password: password,
     CSRFToken: csrf,
   });
@@ -125,10 +137,17 @@ async function login(username, password) {
   });
 
   const landed = await res.text();
-  // A failed login lands back on the login form rather than returning an
-  // error status, so check what we actually got.
-  if (/j_spring_security_check/i.test(landed) && /password/i.test(landed)) {
-    throw new Error("EzyParts rejected the login — check EZYPARTS_USERNAME / EZYPARTS_PASSWORD");
+  // A failed login answers 200 with the login form again rather than an error
+  // status, so the landing page is the only signal. Spring Security sends it
+  // back to /login (usually with ?error=), which is a sharper test than
+  // looking for the word "password" -- the site's own header carries a
+  // "Forgot Password?" link on some pages.
+  const backAtLogin = /\/login(\?|$)/i.test(res.url || "") || /name="j_password"/i.test(landed);
+  if (backAtLogin) {
+    throw new Error(
+      "EzyParts rejected the sign-in. The stored username should be just the login name " +
+        "(the account number is added automatically), and the password must match it."
+    );
   }
   return jar;
 }
@@ -137,6 +156,34 @@ async function getJson(jar, path) {
   const res = await request(jar, BASE + path, { json: true, headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error("EzyParts " + path + " returned " + res.status);
   return res.json();
+}
+
+// Pulls the engine code out of EzyParts' engine string, which reads like
+//   "2.0L  PET B48B20B I4 16v DOHC VVT I/C Turbo Direct Inj {190kW}"
+// i.e. displacement, fuel, then the code. Taking the second word lands on
+// "PET", which is what shipped first time round.
+//
+// The positional read is tried first, then a search for the token that looks
+// like a manufacturer code -- letters and digits together, four or more
+// characters, and not the displacement ("2.0L") or valve count ("16v").
+function engineCode(engine) {
+  const s = String(engine || "").trim();
+  if (!s) return "";
+
+  const looksLikeCode = (t) =>
+    t.length >= 3 &&
+    /[A-Za-z]/.test(t) &&
+    /\d/.test(t) &&
+    !/^[\d.]+L$/i.test(t) && // displacement, "2.0L"
+    !/^\d+v$/i.test(t); // valve count, "16v"
+
+  // The word after displacement and fuel is the code on most vehicles, but
+  // not all: Holden's "5.7L PET GEN IV LS2 V8" puts "GEN" there, so only
+  // accept the positional guess when it actually looks like a code.
+  const positional = s.match(/^[\d.]+\s*L\s+\S+\s+(\S+)/i);
+  if (positional && looksLikeCode(positional[1])) return positional[1];
+
+  return s.split(/\s+/).find(looksLikeCode) || s;
 }
 
 // Flattens the parts response down to the handful of lines a job card wants,
@@ -236,6 +283,7 @@ async function lookupRego({ rego, state, username, password }) {
       // the engine code goes in that field instead -- Ricky's call: the code
       // alone already tells a technician most of what they need.
       engine: v.engine || "",
+      engineCode: engineCode(v.engine),
       description: v.lngDsc || v.desc || "",
       details: v.details || "",
       ezyPartsVehicleId: String(v.id || ""),
@@ -245,4 +293,4 @@ async function lookupRego({ rego, state, username, password }) {
   };
 }
 
-module.exports = { lookupRego, pickParts, extractCsrf };
+module.exports = { lookupRego, pickParts, extractCsrf, engineCode };

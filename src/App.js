@@ -1414,7 +1414,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       // EzyParts has no engine NUMBER (that is stamped on the block), so the
       // engine code goes here instead — Ricky's call: on its own it already
       // tells a technician most of what they need.
-      maybe("engineNumber", (v.engine || "").split(/\s+/)[1] || v.engine);
+      maybe("engineNumber", v.engineCode || v.engine);
       if (Object.keys(headerPatch).length) {
         setHeader((prev) => Object.assign({}, prev, headerPatch));
         setHeaderBy((prev) =>
