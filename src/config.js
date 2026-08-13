@@ -351,10 +351,19 @@ var SECTION_DEFS = [
     id: "quote",
     label: "Quote",
     default: false,
+    // Evaluation labels are prefilled, so only AMOUNTS count as content
+    // there; the item tables count any written cell.
     hasContent: function (s) {
-      return ((s.quote || {}).items || []).some(function (r) {
-        return (r.desc || "").trim() || (r.sell || "").trim() || (r.cost || "").trim();
-      });
+      var q = s.quote || {};
+      var rows = (q.rwc || []).concat(q.other || []).concat(q.items || []);
+      return (
+        rows.some(function (r) {
+          return (r.desc || "").trim() || (r.sell || "").trim() || (r.cost || "").trim();
+        }) ||
+        (q.evaluation || []).some(function (r) {
+          return (r.amount || "").trim();
+        })
+      );
     },
   },
   {
@@ -522,22 +531,51 @@ function buildInitialState() {
   };
 }
 
-// The quote is drafted from the card and sent to the customer by SMS; the
-// customer approves by replying. Approval deliberately stays off the card —
-// no customer login, no approve button, no portal.
+// The quote page, redesigned 2026-08-14 to Ricky's spec: a big QUOTE title,
+// then three blocks —
+//   RWC        items needed to pass the roadworthy
+//   Other      pre-sale work unrelated to RWC (panel damage, stamp duty,
+//              detailing) that lifts the car's sale price
+//   Evaluation his final arithmetic, label + amount per line ("Car cost",
+//              "RWC estimate", ... "Profit margin") — typed by him, never
+//              auto-calculated: the numbers are judgment calls.
 //
-// Each line carries what the customer is charged and what it cost us,
-// matching how Ricky already writes quotes ("Radiator 230/131.91"), and the
-// margin is shown. He asked for it explicitly, knowing he reads the card in
-// front of the customer at pickup: "just do it.. if its too obvious then ill
-// remove it later" — so keep it easy to hide (the .quote-margin class alone).
+// Every block's line count is adjustable with +/- (a car might need one RWC
+// item or ten). The caps exist because the page is one fixed A4 sheet: they
+// are sized so even every block maxed out still fits 1123px — verified in
+// the browser, re-verify if any cap is raised.
+//
+// Charge/cost + margin stay visible (his explicit call, .quote-margin hides
+// it in one line if he changes his mind). SMS approval stays off the card.
 function buildInitialQuote() {
   return {
-    items: buildBlankRows(QUOTE_ROWS, { desc: "", sell: "", cost: "" }),
+    rwc: buildBlankRows(RWC_QUOTE_ROWS, { desc: "", sell: "", cost: "" }),
+    other: buildBlankRows(OTHER_QUOTE_ROWS, { desc: "", sell: "", cost: "" }),
+    evaluation: EVALUATION_DEFAULT_LABELS.map(function (label) {
+      return { label: label, amount: "" };
+    }),
   };
 }
 
-var QUOTE_ROWS = 6;
+// Caps sized so ALL THREE blocks maxed at once still fit the sheet —
+// measured: 12+9+10 rows lands at ~1110px against the 1123px budget, and
+// three more rows was 59px over. RWC's 12 still clears Ricky's "maybe a car
+// has 10 items" case.
+var RWC_QUOTE_ROWS = 5;
+var OTHER_QUOTE_ROWS = 4;
+var RWC_QUOTE_MAX = 12;
+var OTHER_QUOTE_MAX = 9;
+var EVALUATION_MAX = 10;
+
+// His own example sequence, verbatim order. Labels are editable per card.
+var EVALUATION_DEFAULT_LABELS = [
+  "Car cost",
+  "RWC estimate",
+  "Pre-sale prep cost",
+  "Projected market value",
+  "Realistic market value",
+  "Profit margin",
+];
 
 // Diagnostics is a written record, not a checklist — you cannot pre-list what
 // you are looking for until you have looked. The structure comes from the

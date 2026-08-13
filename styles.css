@@ -1199,7 +1199,10 @@ input.office-written[type="checkbox"] {
 }
 
 /* Holds exactly nine 24px ruled lines with nothing wasted:
-     1px border + 6px top padding + (9 x 24) = 223, in a 224px box.
+     1px border + 6px top padding + (9 x 24) = 223 exactly — the ninth rule
+   lands flush on the box's own bottom border, which doubles as that line
+   (same trick as .diag-short-wrap). At 224 the page 1 column ran one pixel
+   past the sheet once the quote page shipped.
    Was ten lines in 248px; the tenth was traded for the header's fifth row
    (Transmission/Compliance/Drive) on 2026-08-13.
    The overrides below are scoped to this wrapper rather than changing
@@ -1208,7 +1211,7 @@ input.office-written[type="checkbox"] {
    Keep this height, the 6px padding and NOTES_LINE_INDEXES in step. */
 .notes-lined-wrap {
   position: relative;
-  height: 224px;
+  height: 223px;
   flex: 0 0 auto;
 }
 
@@ -1457,6 +1460,54 @@ input.office-written[type="checkbox"] {
 }
 
 .quote-margin-figure { color: var(--line-strong); font-weight: 600; }
+
+/* The quote page's own masthead — bigger than a section title, per Ricky. */
+.quote-page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--ink);
+  padding-bottom: 3px;
+  margin-bottom: 6px;
+}
+
+.quote-page-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--ink);
+}
+
+/* Block headings (RWC / Other / Evaluation) with their +/- line controls. */
+.quote-sub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0 2px;
+}
+
+.quote-sub-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+}
+
+.quote-row-btns {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.quote-row-btns .section-toggle:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Evaluation: label | amount, no header row — it reads as a worked sum. */
+.quote-eval td:last-child {
+  width: 26%;
+}
 
 .quote-actions {
   display: flex;

@@ -937,11 +937,11 @@ function money(n) {
 // the card are filled in — the explanation is whatever the technician wrote
 // under Recommendation, not invented here.
 //
-// Cost and margin are deliberately absent: this text goes to the customer.
+// Cost, margin and the Evaluation block are deliberately absent: this text
+// goes to the customer, and the evaluation is the shop's own arithmetic.
 function buildQuoteMessage({ header, diagnostics, quote }) {
   const name = (header.customer || "").trim().split(/\s+/)[0];
   const vehicle = [header.make, header.model].filter(Boolean).join(" ").trim();
-  const totals = quoteTotals(quote.items);
   const lines = [];
 
   lines.push("Hi" + (name ? " " + name : "") + ",");
@@ -958,15 +958,23 @@ function buildQuoteMessage({ header, diagnostics, quote }) {
     lines.push(rec);
   }
 
-  const rows = quote.items.filter((r) => (r.desc || "").trim() || (r.sell || "").trim());
-  if (rows.length) {
+  const written = (rows) => (rows || []).filter((r) => (r.desc || "").trim() || (r.sell || "").trim());
+  const listRows = (label, rows) => {
     lines.push("");
-    lines.push("Quote:");
+    lines.push(label + ":");
     rows.forEach((r) => {
       const s = parseFloat(String(r.sell).replace(/[^0-9.\-]/g, ""));
       lines.push((r.desc || "").trim() + (isNaN(s) ? "" : ": " + money(s)));
     });
-    lines.push("Total: " + money(totals.sell));
+    lines.push("Total: " + money(quoteTotals(rows).sell));
+  };
+
+  const rwcRows = written(quote.rwc);
+  const otherRows = written(quote.other);
+  if (rwcRows.length) listRows("RWC", rwcRows);
+  if (otherRows.length) listRows(rwcRows.length ? "Other work" : "Quote", otherRows);
+  if (rwcRows.length && otherRows.length) {
+    lines.push("Combined total: " + money(quoteTotals(rwcRows.concat(otherRows)).sell));
   }
 
   lines.push("");
@@ -977,38 +985,37 @@ function buildQuoteMessage({ header, diagnostics, quote }) {
   return lines.join("\n");
 }
 
-function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle, disabled, exportMode, role }) {
-  const [copied, setCopied] = React.useState(false);
-  const totals = quoteTotals(quote.items);
+// One priced item table (RWC / Other): item, charge, cost+margin, totals,
+// and its own +/- row controls. The row caps keep the fixed A4 sheet honest.
+function QuoteItemTable({ title, rows, max, onRows, disabled, exportMode, role }) {
+  const totals = quoteTotals(rows);
 
-  // Per-cell attribution, same convention as the fault codes: office edits
-  // render red/bold so the quote shows whose figures they are.
   function setRow(index, field, value) {
-    onChange({
-      items: quote.items.map((r, i) =>
-        i === index ? Object.assign({}, r, { [field]: value, [field + "By"]: role || "" }) : r
-      ),
-    });
+    onRows(rows.map((r, i) => (i === index ? Object.assign({}, r, { [field]: value, [field + "By"]: role || "" }) : r)));
   }
-
-  async function copyMessage() {
-    try {
-      await navigator.clipboard.writeText(buildQuoteMessage({ header, diagnostics, quote }));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error(err);
-    }
+  function addRow() {
+    if (rows.length >= max) return;
+    onRows(rows.concat([{ desc: "", sell: "", cost: "" }]));
+  }
+  function removeRow() {
+    if (rows.length <= 1) return;
+    const last = rows[rows.length - 1];
+    const hasContent = (last.desc || "").trim() || (last.sell || "").trim() || (last.cost || "").trim();
+    if (hasContent && !window.confirm("The last " + title + " line has something in it. Remove it?")) return;
+    onRows(rows.slice(0, -1));
   }
 
   return html`
-    <${SectionTitle}
-      label="Quote"
-      sectionId="quote"
-      sections=${sections}
-      onToggle=${onToggle}
-      exportMode=${exportMode}
-    />
+    <div class="quote-sub-head">
+      <span class="quote-sub-title">${title}</span>
+      ${!exportMode &&
+      html`
+        <span class="quote-row-btns">
+          <button type="button" class="section-toggle" onClick=${removeRow} disabled=${disabled || rows.length <= 1} title="Remove a line">−</button>
+          <button type="button" class="section-toggle" onClick=${addRow} disabled=${disabled || rows.length >= max} title="Add a line">+</button>
+        </span>
+      `}
+    </div>
     <table class="quote-table">
       <thead>
         <tr>
@@ -1018,7 +1025,7 @@ function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle
         </tr>
       </thead>
       <tbody>
-        ${quote.items.map(
+        ${rows.map(
           (row, i) => html`
             <tr key=${i}>
               <td>
@@ -1047,6 +1054,108 @@ function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle
         </tr>
       </tfoot>
     </table>
+  `;
+}
+
+function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle, disabled, exportMode, role }) {
+  const [copied, setCopied] = React.useState(false);
+
+  function setEvalRow(index, field, value) {
+    onChange({
+      evaluation: quote.evaluation.map((r, i) =>
+        i === index ? Object.assign({}, r, { [field]: value, [field + "By"]: role || "" }) : r
+      ),
+    });
+  }
+  function addEvalRow() {
+    if (quote.evaluation.length >= EVALUATION_MAX) return;
+    onChange({ evaluation: quote.evaluation.concat([{ label: "", amount: "" }]) });
+  }
+  function removeEvalRow() {
+    const rows = quote.evaluation;
+    if (rows.length <= 1) return;
+    const last = rows[rows.length - 1];
+    if (
+      ((last.label || "").trim() || (last.amount || "").trim()) &&
+      !window.confirm("The last Evaluation line has something in it. Remove it?")
+    )
+      return;
+    onChange({ evaluation: rows.slice(0, -1) });
+  }
+
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(buildQuoteMessage({ header, diagnostics, quote }));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  return html`
+    <div class="quote-page-head">
+      <span class="quote-page-title">QUOTE</span>
+      ${!exportMode &&
+      html`
+        <button
+          type="button"
+          class="section-toggle"
+          onClick=${() => onToggle("quote")}
+          title="Remove the quote page"
+        >−</button>
+      `}
+    </div>
+
+    <${QuoteItemTable}
+      title="RWC"
+      rows=${quote.rwc}
+      max=${RWC_QUOTE_MAX}
+      onRows=${(rows) => onChange({ rwc: rows })}
+      disabled=${disabled}
+      exportMode=${exportMode}
+      role=${role}
+    />
+
+    <${QuoteItemTable}
+      title="Other"
+      rows=${quote.other}
+      max=${OTHER_QUOTE_MAX}
+      onRows=${(rows) => onChange({ other: rows })}
+      disabled=${disabled}
+      exportMode=${exportMode}
+      role=${role}
+    />
+
+    <div class="quote-sub-head">
+      <span class="quote-sub-title">Evaluation</span>
+      ${!exportMode &&
+      html`
+        <span class="quote-row-btns">
+          <button type="button" class="section-toggle" onClick=${removeEvalRow} disabled=${disabled || quote.evaluation.length <= 1} title="Remove a line">−</button>
+          <button type="button" class="section-toggle" onClick=${addEvalRow} disabled=${disabled || quote.evaluation.length >= EVALUATION_MAX} title="Add a line">+</button>
+        </span>
+      `}
+    </div>
+    <table class="quote-table quote-eval">
+      <tbody>
+        ${quote.evaluation.map(
+          (row, i) => html`
+            <tr key=${i}>
+              <td>
+                <${CellInput} value=${row.label} by=${row.labelBy} disabled=${disabled} exportMode=${exportMode}
+                  onChange=${(v) => setEvalRow(i, "label", v)} />
+              </td>
+              <td class="quote-num">
+                <${CellInput} value=${row.amount} by=${row.amountBy} align="right" disabled=${disabled} exportMode=${exportMode}
+                  onChange=${(v) => setEvalRow(i, "amount", v)} />
+              </td>
+            </tr>
+          `
+        )}
+      </tbody>
+    </table>
+
     ${!exportMode &&
     html`
       <div class="quote-actions no-print">
@@ -1054,7 +1163,7 @@ function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle
           ${copied ? "Copied ✓" : "Copy message for customer"}
         </button>
         <span class="quote-hint">
-          Builds the SMS from Probable cause, Recommendation and the charges above. Cost and margin are left out.
+          Builds the SMS from Probable cause, Recommendation and the RWC/Other charges. Cost, margin and the Evaluation stay off it.
         </span>
       </div>
     `}
@@ -1158,7 +1267,10 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
   const [preService, setPreService] = React.useState(() => seed("preService", initial.preService));
   const [sections, setSections] = React.useState(() => seed("sections", initial.sections));
   const [diagnostics, setDiagnostics] = React.useState(() => seed("diagnostics", initial.diagnostics));
-  const [quote, setQuote] = React.useState(() => seed("quote", initial.quote));
+  // Merged over the defaults rather than seeded wholesale: saves from before
+  // the quote page grew its RWC/Other/Evaluation blocks carry only {items},
+  // and resuming one must not leave the new blocks undefined.
+  const [quote, setQuote] = React.useState(() => Object.assign({}, initial.quote, seed("quote", {})));
   const [officeNotes, setOfficeNotes] = React.useState(() => seed("officeNotes", NOTES_BLANK_VALUE));
   const [officeNotesBy, setOfficeNotesBy] = React.useState(() => seed("officeNotesBy", ""));
   const [aboveCar, setAboveCar] = React.useState(() => seed("aboveCar", initial.aboveCar));
@@ -1293,9 +1405,9 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     1 + (page2Used ? 1 : 0) + (diagPageUsed ? 1 : 0) + (quotePageUsed ? 1 : 0);
 
   const updateHeader = (key, value) => {
-    // Plates are caps by definition; typing "vams01" and printing "vams01"
-    // just looks like a mistake on the card.
-    if (key === "registration") value = value.toUpperCase();
+    // Plates are caps by definition, and Ricky wants transmission the same
+    // ("AUTO"); lowercase either just looks like a mistake on the card.
+    if (key === "registration" || key === "transmission") value = value.toUpperCase();
     setHeader((prev) => ({ ...prev, [key]: value }));
     setHeaderBy((prev) => ({ ...prev, [key]: role }));
   };
@@ -1464,7 +1576,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       // the engine code, which on its own already tells a technician most of
       // what they need.
       maybe("engineNumber", v.engineNo || v.engineCode || v.engine);
-      maybe("transmission", v.transmission);
+      maybe("transmission", (v.transmission || "").toUpperCase());
       maybe("compliance", v.compliance);
       maybe("drive", v.drive);
       if (Object.keys(headerPatch).length) {
