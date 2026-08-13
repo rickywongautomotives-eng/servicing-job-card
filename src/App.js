@@ -1429,9 +1429,10 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       // BRAND_RULES in functions/ezyparts.js.
       const partFields = res.fields || {};
 
-      // Oil grade carries the spec as well as the code — "HPR0 5.3L, 0W-30"
-      // is far more use on the bench than a bare product number.
-      const describe = (p) => [p.code, p.notes || p.description].filter(Boolean).join(" — ");
+      // The server sends a `display` per part — for oils that is the short
+      // "TG7580 75W-80 GL4 - 1.9L" form (Ricky's format; the full catalogue
+      // sentence was too long for the checklist rows).
+      const describe = (p) => p.display || [p.code, p.notes || p.description].filter(Boolean).join(" — ");
 
       const oilPatch = {};
       if (partFields.oilFilter && !(oilSpec.oilFilter || "").trim()) {
@@ -1449,10 +1450,9 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         );
       }
 
-      // Everything else drops into the Fluids & Filters checklist. Oils get
-      // their spec alongside the code for the same reason as above; filters,
-      // plugs and belts are identified by their number alone.
-      const WITH_SPEC = ["brakeFluid", "coolant", "clutchFluid", "transCaseOil", "autoOil", "manualOil", "fDiffOil", "rDiffOil"];
+      // Everything else drops into the Fluids & Filters checklist. `display`
+      // already carries the right form per kind: short spec for oils, bare
+      // part number for filters, plugs and belts.
       const fluidPatch = {};
       Object.keys(partFields).forEach((key) => {
         if (key === "oilFilter" || key === "oilGrade") return;
@@ -1460,7 +1460,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         if ((fluids[key].value || "").trim()) return; // never overwrite
         const part = partFields[key];
         fluidPatch[key] = Object.assign({}, fluids[key], {
-          value: WITH_SPEC.indexOf(key) !== -1 ? describe(part) : part.code,
+          value: describe(part),
           valueBy: role,
         });
         filled.push(part.category || key);

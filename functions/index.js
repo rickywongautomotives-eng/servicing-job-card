@@ -481,6 +481,14 @@ exports.lookupRego = onCall(
         found: result.found,
         by: email,
         filledFields: Object.keys(result.fields || {}),
+        // field -> "brand code @ heading", so a wrong pick can be traced to
+        // the exact heading it came from without another guessing round.
+        fieldsChosen: Object.fromEntries(
+          Object.entries(result.fields || {}).map(([k, p]) => [
+            k,
+            ((p.brand || "") + " " + (p.code || "") + " @ " + (p.category || "")).trim(),
+          ])
+        ),
         categoryNames: (result.diagnostics || {}).categoryNames,
         categoriesTried: (result.diagnostics || {}).categoriesTried,
         categoriesFailed: (result.diagnostics || {}).failed,

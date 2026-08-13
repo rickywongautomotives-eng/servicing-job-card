@@ -235,16 +235,68 @@ const FIELD_RULES = [
   { field: "cabinFilter", kind: "filter", match: /cabin/i },
   { field: "fuelFilter", kind: "filter", match: /^fuel filter$/i },
   { field: "brakeFluid", kind: "oil", match: /brake fluid/i },
-  { field: "coolant", kind: "oil", match: /coolant|antifreeze/i },
-  { field: "clutchFluid", kind: "oil", match: /clutch fluid/i },
+  // Anchored, or "Throttle Body Coolant Hose" (a hose, in the Cooling
+  // category) lands in the Coolant row on any car whose earlier categories
+  // don't carry the fluid.
+  { field: "coolant", kind: "oil", match: /^(?:engine\s+)?coolant\b|antifreeze/i },
+  // The real heading is "Clutch Hydraulic Fluid" -- adjacency never matched
+  // it and the row stayed blank on a card whose payload carried it.
+  { field: "clutchFluid", kind: "oil", match: /clutch\s*(?:hydraulic\s*)?fluid/i },
   { field: "sparkPlugs", kind: "plug", match: /spark plug/i },
-  { field: "driveBelts", kind: "belt", match: /drive belt|serpentine|multi.?rib|v.?belt/i },
-  { field: "transCaseOil", kind: "oil", match: /transfer case/i },
-  { field: "autoOil", kind: "oil", match: /automatic transmission (fluid|oil)|auto trans/i },
-  { field: "manualOil", kind: "oil", match: /manual transmission (fluid|oil)|manual trans|gearbox oil/i },
-  { field: "fDiffOil", kind: "oil", match: /front diff/i },
-  { field: "rDiffOil", kind: "oil", match: /rear diff/i },
+  // The Belts category is mostly hardware -- "Drive Belt Tensioner
+  // Assembly", "Drive Belt Idler Pulley", "Timing Chain Kit" -- and any of
+  // those would claim the row on a car with no serpentine-belt heading.
+  {
+    field: "driveBelts",
+    kind: "belt",
+    match: /^(?!.*(?:tensioner|idler|layout|kit|tool))(?=.*(?:drive belt|serpentine|multi.?rib|v.?belt))/i,
+  },
+  // The card's "Trans Case Oil" is EzyParts' "Transfer Case Oil".
+  { field: "transCaseOil", kind: "oil", match: /transfer\s*case/i },
+  // The real heading is "Automatic Trans Fluid" -- "Trans", not
+  // "Transmission" -- which the first pattern here missed entirely and left
+  // the Auto Oil row blank on a card whose payload carried it. The
+  // exclusions matter as much as the match: "Automatic Trans Filter" sits
+  // right beside it and would otherwise claim the row first, and the Cooling
+  // category carries an "Automatic Trans Oil Cooler".
+  { field: "autoOil", kind: "oil", match: /^(?!.*(?:filter|cooler|seal|kit|tool))auto(?:matic)?\.?\s*trans/i },
+  { field: "manualOil", kind: "oil", match: /manual\s*trans|gearbox oil/i },
+  // Written as look-aheads so both "Front Differential Oil" and
+  // "Differential Oil - Front" match; the exact wording is unverified until
+  // a 4WD goes through a lookup.
+  { field: "fDiffOil", kind: "oil", match: /^(?=[\s\S]*diff)(?=[\s\S]*front)/i },
+  { field: "rDiffOil", kind: "oil", match: /^(?=[\s\S]*diff)(?=[\s\S]*rear)/i },
 ];
+
+// One-line spec for an oil pick, per Ricky's format: "TG7580 75W-80 GL4 -
+// 1.9L" instead of the full "1.9L Capacity ; Full Synthetic, SAE 75W-80,
+// API GL-4 PLUS" sentence, which was too long for the checklist rows.
+// Pieces, all optional: viscosity (skipped when its digits are already in
+// the product code, e.g. EPLUS5W30), GL class for gear oils, DOT rating for
+// brake fluid, capacity last.
+function shortOilSpec(code, notes) {
+  const s = String(notes || "");
+  const pieces = [String(code || "").trim()];
+
+  const visc = s.match(/SAE\s*([0-9]{1,2}W-?[0-9]{2,3})/i);
+  if (visc) {
+    const flat = visc[1].replace(/[^0-9W]/gi, "").toUpperCase();
+    const codeFlat = String(code || "").replace(/[^0-9W]/gi, "").toUpperCase();
+    if (!codeFlat.includes(flat)) pieces.push(visc[1].toUpperCase());
+  }
+
+  const gl = s.match(/API\s*GL-?\s*(\d)/i);
+  if (gl) pieces.push("GL" + gl[1]);
+
+  const dot = s.match(/DOT\s*([345](?:\.1)?)/i);
+  if (dot) pieces.push("DOT" + dot[1]);
+
+  const cap = s.match(/([\d.]+)\s*(m?L)\s*Capacity/i);
+  const capacity = cap ? cap[1] + cap[2] : "";
+
+  const head = pieces.filter(Boolean).join(" ");
+  return capacity ? head + " - " + capacity : head;
+}
 
 // Picks one part for a category, following the brand preference and falling
 // back to whatever is listed rather than leaving the row empty.
@@ -281,7 +333,12 @@ function pickParts(partsPayload) {
     // same part under a second heading.
     if (chosen[rule.field]) return;
     const pick = preferBrand(parts, rule.kind);
-    if (pick) chosen[rule.field] = pick;
+    if (pick) {
+      chosen[rule.field] = Object.assign({}, pick, {
+        kind: rule.kind,
+        display: rule.kind === "oil" ? shortOilSpec(pick.code, pick.notes || pick.description) : pick.code,
+      });
+    }
   });
 
   return { fields: chosen, all };
@@ -309,6 +366,12 @@ async function addPrices(jar, parts) {
     if (id) byId.set(id, row);
   });
   return parts.map((p) => {
+    // Oil FAMILY rows (HPR0, TG7580) have no product id -- the ids live on
+    // their per-size children -- so they can never be priced here. They must
+    // also never be looked up by an empty key: every no-id part mapping to
+    // the same "" entry is exactly how one gearbox oil ended up pasted into
+    // oil grade, brake fluid AND coolant at once.
+    if (!p.productId) return p;
     const row = byId.get(p.productId);
     if (!row) return p;
     return Object.assign({}, p, {
@@ -497,8 +560,15 @@ async function lookupRego({ rego, state, username, password }) {
 
   try {
     const pricedList = await addPrices(jar, Object.values(fields));
-    const byId = new Map(pricedList.map((p) => [p.productId, p]));
+    // Same empty-key hazard as inside addPrices: parts without a product id
+    // must not share a Map slot, or every id-less field gets whichever part
+    // landed there last.
+    const byId = new Map();
+    pricedList.forEach((p) => {
+      if (p.productId) byId.set(p.productId, p);
+    });
     Object.keys(fields).forEach((k) => {
+      if (!fields[k].productId) return;
       const priced = byId.get(fields[k].productId);
       if (priced) fields[k] = priced;
     });
@@ -535,4 +605,13 @@ async function lookupRego({ rego, state, username, password }) {
   };
 }
 
-module.exports = { lookupRego, pickParts, preferBrand, extractCsrf, engineCode, categoriesFromHtml, FIELD_RULES };
+module.exports = {
+  lookupRego,
+  pickParts,
+  preferBrand,
+  extractCsrf,
+  engineCode,
+  categoriesFromHtml,
+  shortOilSpec,
+  FIELD_RULES,
+};
