@@ -250,10 +250,13 @@ const FIELD_RULES = [
   // The Belts category is mostly hardware -- "Drive Belt Tensioner
   // Assembly", "Drive Belt Idler Pulley", "Timing Chain Kit" -- and any of
   // those would claim the row on a car with no serpentine-belt heading.
+  // "^belt\s*-" covers the per-accessory naming some vehicles use ("Belt -
+  // Alternator", "Belt - A/C") without touching "Timing Belt", which is a
+  // major job and must never be suggested as a drive belt.
   {
     field: "driveBelts",
     kind: "belt",
-    match: /^(?!.*(?:tensioner|idler|layout|kit|tool))(?=.*(?:drive belt|serpentine|multi.?rib|v.?belt))/i,
+    match: /^(?!.*(?:tensioner|idler|layout|kit|tool))(?:(?=.*(?:drive belt|serpentine|multi.?rib|v.?belt))|belt\s*-)/i,
   },
   // The card's "Trans Case Oil" is EzyParts' "Transfer Case Oil".
   { field: "transCaseOil", kind: "oil", match: /transfer\s*case/i },
@@ -265,11 +268,23 @@ const FIELD_RULES = [
   // category carries an "Automatic Trans Oil Cooler".
   { field: "autoOil", kind: "oil", match: /^(?!.*(?:filter|cooler|seal|kit|tool))auto(?:matic)?\.?\s*trans/i },
   { field: "manualOil", kind: "oil", match: /manual\s*trans|gearbox oil/i },
-  // Written as look-aheads so both "Front Differential Oil" and
-  // "Differential Oil - Front" match; the exact wording is unverified until
-  // a 4WD goes through a lookup.
-  { field: "fDiffOil", kind: "oil", match: /^(?=[\s\S]*diff)(?=[\s\S]*front)/i },
-  { field: "rDiffOil", kind: "oil", match: /^(?=[\s\S]*diff)(?=[\s\S]*rear)/i },
+  // Verified against a real Pajero: requiring only "diff" plus a side put a
+  // SuperPro suspension bush in the R/Diff Oil row -- the Shafts category is
+  // full of "Differential Mount - Front" and "Differential Mount Bush -
+  // Rear" hardware -- so the rules demand "oil" and exclude the hardware
+  // words. The oil heading itself was just "Differential Oil", no side at
+  // all, which is why each rule accepts an UN-sided heading and only rejects
+  // the opposite side: one "Differential Oil" heading fills both rows.
+  {
+    field: "fDiffOil",
+    kind: "oil",
+    match: /^(?!.*(?:mount|bush|seal|bearing|gasket|kit|breather))(?=.*diff)(?=.*oil)(?!.*rear)/i,
+  },
+  {
+    field: "rDiffOil",
+    kind: "oil",
+    match: /^(?!.*(?:mount|bush|seal|bearing|gasket|kit|breather))(?=.*diff)(?=.*oil)(?!.*front)/i,
+  },
 ];
 
 // One-line spec for an oil pick, per Ricky's format: "TG7580 75W-80 GL4 -
@@ -356,15 +371,17 @@ function pickParts(partsPayload) {
     if (!parts.length) return;
     all.push.apply(all, parts);
 
-    const rule = FIELD_RULES.find((r) => r.match.test(name));
-    if (!rule) return;
-    // First category to claim a field wins; EzyParts sometimes lists the
-    // same part under a second heading.
-    if (chosen[rule.field]) return;
-    const candidates = rule.minDot4 ? dot4Minimum(parts) : parts;
-    if (!candidates.length) return;
-    const pick = preferBrand(candidates, rule.kind);
-    if (pick) {
+    // EVERY matching rule fires, not just the first: the Pajero lists one
+    // un-sided "Differential Oil" heading that must fill both diff rows.
+    // First heading to claim a field still wins -- EzyParts sometimes lists
+    // the same part under a second heading.
+    FIELD_RULES.forEach((rule) => {
+      if (!rule.match.test(name)) return;
+      if (chosen[rule.field]) return;
+      const candidates = rule.minDot4 ? dot4Minimum(parts) : parts;
+      if (!candidates.length) return;
+      const pick = preferBrand(candidates, rule.kind);
+      if (!pick) return;
       // Brake/clutch rows show the RATING, not the product name: Penrite's
       // family row is literally named "BF", and "BF DOT4" on the card just
       // begged the question of what BF meant. The rating is the spec here.
@@ -376,7 +393,7 @@ function pickParts(partsPayload) {
           ? shortOilSpec(pick.code, pick.notes || pick.description)
           : pick.code;
       chosen[rule.field] = Object.assign({}, pick, { kind: rule.kind, display });
-    }
+    });
   });
 
   return { fields: chosen, all };
