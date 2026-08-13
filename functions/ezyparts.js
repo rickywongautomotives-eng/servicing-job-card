@@ -253,9 +253,12 @@ const FIELD_RULES = [
   // "^belt\s*-" covers the per-accessory naming some vehicles use ("Belt -
   // Alternator", "Belt - A/C") without touching "Timing Belt", which is a
   // major job and must never be suggested as a drive belt.
+  // join: a car can run several accessory belts ("Belt - Alternator",
+  // "Belt - A/C"); Ricky wants every code in the row, not just the first.
   {
     field: "driveBelts",
     kind: "belt",
+    join: true,
     match: /^(?!.*(?:tensioner|idler|layout|kit|tool))(?:(?=.*(?:drive belt|serpentine|multi.?rib|v.?belt))|belt\s*-)/i,
   },
   // The card's "Trans Case Oil" is EzyParts' "Transfer Case Oil".
@@ -377,11 +380,22 @@ function pickParts(partsPayload) {
     // the same part under a second heading.
     FIELD_RULES.forEach((rule) => {
       if (!rule.match.test(name)) return;
-      if (chosen[rule.field]) return;
+      const prev = chosen[rule.field];
+      if (prev && !rule.join) return;
       const candidates = rule.minDot4 ? dot4Minimum(parts) : parts;
       if (!candidates.length) return;
       const pick = preferBrand(candidates, rule.kind);
       if (!pick) return;
+      // join rows accumulate: a second heading's code is appended to the
+      // display ("6PK2260 / 4PK1120") rather than discarded. The rest of the
+      // part data stays from the first pick; the same code appearing under
+      // two headings is not repeated.
+      if (prev) {
+        if (pick.code && prev.display.indexOf(pick.code) === -1) {
+          chosen[rule.field] = Object.assign({}, prev, { display: prev.display + " / " + pick.code });
+        }
+        return;
+      }
       // Brake/clutch rows show the RATING, not the product name: Penrite's
       // family row is literally named "BF", and "BF DOT4" on the card just
       // begged the question of what BF meant. The rating is the spec here.
