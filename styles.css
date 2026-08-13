@@ -1194,15 +1194,17 @@ input.office-written[type="checkbox"] {
   outline: 2px solid var(--accent);
 }
 
-/* Holds exactly ten 24px ruled lines with nothing wasted:
-     1px border + 6px top padding + (10 x 24) = 247, in a 248px box.
+/* Holds exactly nine 24px ruled lines with nothing wasted:
+     1px border + 6px top padding + (9 x 24) = 223, in a 224px box.
+   Was ten lines in 248px; the tenth was traded for the header's fifth row
+   (Transmission/Compliance/Drive) on 2026-08-13.
    The overrides below are scoped to this wrapper rather than changing
    .ruled-fill/.notes-lines globally, because the page 2 book notes and the
    PPI boxes share those classes and are laid out differently.
    Keep this height, the 6px padding and NOTES_LINE_INDEXES in step. */
 .notes-lined-wrap {
   position: relative;
-  height: 248px;
+  height: 224px;
   flex: 0 0 auto;
 }
 

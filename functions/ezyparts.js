@@ -222,6 +222,39 @@ function engineCode(engine) {
   return s.split(/\s+/).find(looksLikeCode) || s;
 }
 
+// Transmission and drive, read out of EzyParts' descriptive strings — the
+// "Vehicle Details" panel on their own site shows "Transmission: Auto" and
+// "Drive: RWD", and those words live in lngDsc ("BMW 330i TOURING Auto G21
+// ... 4 Door Wagon RWD PETROL ...") and details ("..., RWD ..., AT"). There
+// is no dedicated field for either in the search response.
+function transmissionOf(v) {
+  const s = (v.lngDsc || "") + " " + (v.details || "");
+  const word = s.match(/\b(Automatic|Auto|Manual|CVT|DCT|DSG|AMT)\b/i);
+  if (word) {
+    const t = word[1].toUpperCase();
+    if (t === "AUTO" || t === "AUTOMATIC") return "Auto";
+    if (t === "MANUAL") return "Manual";
+    return t;
+  }
+  // details falls back to bare codes: ", AT" / ", MT".
+  const code = s.match(/[,\s](AT|MT)\b/);
+  if (code) return code[1] === "AT" ? "Auto" : "Manual";
+  return "";
+}
+
+function driveOf(v) {
+  const s = (v.lngDsc || "") + " " + (v.details || "");
+  const m = s.match(/\b(4WD|AWD|FWD|RWD|4X4)\b/i);
+  return m ? m[1].toUpperCase() : "";
+}
+
+// "2022-09" -> "09/22", Ricky's preferred compliance form.
+function complianceDisplay(complianceDate) {
+  const m = String(complianceDate || "").match(/^(\d{4})-(\d{1,2})$/);
+  if (!m) return String(complianceDate || "");
+  return m[2].padStart(2, "0") + "/" + m[1].slice(2);
+}
+
 // Maps EzyParts' category names onto the job card's own checklist rows.
 // Matched on NAME rather than category id: the names are stable and readable
 // ("Oil Filter", "Spark Plug"), the numeric ids are not documented anywhere.
@@ -656,11 +689,17 @@ async function lookupRego({ rego, state, username, password }) {
       make: v.make || "",
       model: v.model || "",
       series: v.series || "",
-      // EzyParts does not hold the engine NUMBER stamped on the block, so
-      // the engine code goes in that field instead -- Ricky's call: the code
-      // alone already tells a technician most of what they need.
       engine: v.engine || "",
       engineCode: engineCode(v.engine),
+      // The REAL engine number (stamped on the block), from NEVDIS via the
+      // search response. Often empty — the BMW test car has none — but when
+      // present it beats the code: "a sure way method of making sure its the
+      // correct engine number without ever 2nd guessing" (Ricky). The client
+      // uses it first and falls back to the code.
+      engineNo: (search.engineNo || "").trim(),
+      transmission: transmissionOf(v),
+      drive: driveOf(v),
+      compliance: complianceDisplay(search.complianceDate),
       description: v.lngDsc || v.desc || "",
       details: v.details || "",
       ezyPartsVehicleId: String(v.id || ""),
@@ -683,5 +722,8 @@ module.exports = {
   categoriesFromHtml,
   shortOilSpec,
   dot4Minimum,
+  transmissionOf,
+  driveOf,
+  complianceDisplay,
   FIELD_RULES,
 };

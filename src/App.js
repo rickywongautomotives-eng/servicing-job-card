@@ -1411,10 +1411,14 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       maybe("vin", v.vin);
       maybe("make", v.make);
       maybe("model", v.model);
-      // EzyParts has no engine NUMBER (that is stamped on the block), so the
-      // engine code goes here instead — Ricky's call: on its own it already
-      // tells a technician most of what they need.
-      maybe("engineNumber", v.engineCode || v.engine);
+      // The real engine number when NEVDIS carries it — "a sure way method
+      // of making sure its the correct engine number" (Ricky) — otherwise
+      // the engine code, which on its own already tells a technician most of
+      // what they need.
+      maybe("engineNumber", v.engineNo || v.engineCode || v.engine);
+      maybe("transmission", v.transmission);
+      maybe("compliance", v.compliance);
+      maybe("drive", v.drive);
       if (Object.keys(headerPatch).length) {
         setHeader((prev) => Object.assign({}, prev, headerPatch));
         setHeaderBy((prev) =>

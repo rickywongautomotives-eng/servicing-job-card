@@ -37,7 +37,7 @@ const TIMEZONE = "Australia/Sydney";
 const CALENDAR_ID = "2bb5294927d0e8741203f0086f97ebf6112b2192a9392415da25ab98d5970ab1@group.calendar.google.com";
 
 // Mirrors src/config.js exactly -- keep in sync if the app's field lists change.
-const HEADER_KEYS = ["date", "customer", "email", "mobile", "technician", "make", "model", "registration", "kilometers", "vin", "engineNumber"];
+const HEADER_KEYS = ["date", "customer", "email", "mobile", "technician", "make", "model", "registration", "kilometers", "vin", "engineNumber", "transmission", "compliance", "drive"];
 const CARD_CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const FLUID_ITEMS = [
   { key: "engineFlush", patterns: ["engine flush"] },
@@ -222,7 +222,10 @@ var SERVICE_ITEM_GROUP_THRESHOLD = 3;
 // Ruled lines in the Page 1 office notes box (NOTES_LINE_INDEXES in
 // src/config.js). Notes are padded with blank lines to this many so every
 // ruled line can be clicked into.
-var OFFICE_NOTES_LINE_COUNT = 10;
+// 10 -> 9 on 2026-08-13: the tenth notes line was traded for the header's
+// fifth row. Keep in step with NOTES_LINE_INDEXES (src/config.js) and the
+// .notes-lined-wrap height (styles.css).
+var OFFICE_NOTES_LINE_COUNT = 9;
 
 function isServiceItemLine(line) {
   if (/^battery\b/i.test(line)) return true;

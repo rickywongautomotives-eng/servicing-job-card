@@ -176,3 +176,20 @@ check(m.pickParts(payload2).fields.brakeFluid.display, "DOT4 - 500mL", "named-DO
 console.log(bad ? bad + " FAILED" : "all passed");
 process.exitCode = bad ? 1 : 0;
 
+
+// --- vehicle detail parsing (transmission / drive / compliance) ---
+const bmw = { lngDsc: 'BMW 330i TOURING Auto G21 07/2019~07/2022 4 Door Wagon RWD PETROL 2.0 litre, B48B20B I4 16v DOHC VVT I/C Turbo Direct Inj {190kW} ', details: 'TOURING,  4D Wagon, RWD WBA6K520  [GERMANY], AT' };
+check(m.transmissionOf(bmw), 'Auto', 'transmission from lngDsc word');
+check(m.driveOf(bmw), 'RWD', 'drive from lngDsc');
+check(m.transmissionOf({ details: 'X, 4D Sedan, FWD ABC  [JAPAN], MT' }), 'Manual', 'transmission from details MT code');
+check(m.driveOf({ details: 'X, 4D Sedan, FWD ABC [JAPAN], MT' }), 'FWD', 'drive from details');
+check(m.transmissionOf({ lngDsc: 'HONDA ACCORD EURO Manual 6 Speed ...' }), 'Manual', 'manual word');
+check(m.transmissionOf({ lngDsc: 'SUBARU XV CVT ...' }), 'CVT', 'CVT kept as-is');
+check(m.driveOf({ lngDsc: 'MITSUBISHI PAJERO ... 4WD DIESEL' }), '4WD', '4WD');
+check(m.transmissionOf({}), '', 'no data, no guess');
+check(m.complianceDisplay('2022-09'), '09/22', 'compliance YYYY-MM to MM/YY');
+check(m.complianceDisplay('2019-4'), '04/19', 'single-digit month padded');
+check(m.complianceDisplay(''), '', 'empty compliance stays empty');
+
+console.log(bad ? bad + ' FAILED (with vehicle details)' : 'all passed (with vehicle details)');
+process.exitCode = bad ? 1 : 0;

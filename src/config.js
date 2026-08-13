@@ -17,6 +17,11 @@ var HEADER_FIELDS = [
   { key: "kilometers", label: "Kilometers", type: "number" },
   { key: "vin", label: "VIN Number", type: "text" },
   { key: "engineNumber", label: "Engine No", type: "text" },
+  // From the EzyParts registration details, filled by the rego lookup.
+  // Compliance is written MM/YY ("09/22") — Ricky's preferred form.
+  { key: "transmission", label: "Transmission", type: "text" },
+  { key: "compliance", label: "Compliance", type: "text" },
+  { key: "drive", label: "Drive", type: "text" },
 ];
 
 // Groups the header fields into scannable clusters.
@@ -25,18 +30,22 @@ var HEADER_FIELDS = [
 // to fill in). Technician pairs with Engine No under Vehicle instead —
 // both short values. VIN fills the row Vehicle would otherwise leave
 // blank, since Job & Customer runs one line taller than Vehicle's others.
+// Five rows a side (Ricky's layout, 2026-08-13). Technician moved to the
+// bottom of Job & Customer to free its old cell for Transmission; the new
+// vehicle row holds Compliance | Drive; VIN keeps the full-width bottom row.
+// The extra row is paid for by the Page 1 notes box dropping 10 lines -> 9.
 var HEADER_GROUPS = [
   {
     title: "Job & Customer",
-    keys: ["date", "customer", "mobile", "email"],
+    keys: ["date", "customer", "mobile", "email", "technician"],
   },
   {
     title: "Vehicle",
-    keys: ["make", "model", "registration", "kilometers", "engineNumber", "technician", "vin"],
+    keys: ["make", "model", "registration", "kilometers", "engineNumber", "transmission", "compliance", "drive", "vin"],
   },
 ];
 
-var WIDE_HEADER_FIELD_KEYS = ["customer", "mobile", "email", "vin", "date"];
+var WIDE_HEADER_FIELD_KEYS = ["customer", "mobile", "email", "vin", "date", "technician"];
 
 // Quick-reference callout for techs (what parts to grab) — set by the office,
 // not a checklist item, so it lives outside the Fluids & Filters section.
@@ -184,11 +193,12 @@ var STATUS_OPTIONS_CONDITION = [
 
 // Ruled-line guides drawn behind notes boxes (as real bordered divs, not a
 // CSS gradient — html2canvas doesn't render gradients).
-// Exactly the number of 24px lines that fit .notes-lined-wrap (260px). Was
-// 12, which drew two-and-a-bit lines below the visible area — invisible, but
-// it also meant the blank-line prefill below over-provisioned into space
-// that could never be written on. Keep this in step with that CSS height.
-var NOTES_LINE_INDEXES = Array.from({ length: 10 }, (_, i) => i);
+// Exactly the number of 24px lines that fit .notes-lined-wrap. Went 10 -> 9
+// on 2026-08-13: the header gained a fifth row (Transmission/Compliance/
+// Drive from the rego lookup) and the notes box paid for it — Ricky's own
+// suggestion. Keep this in step with that CSS height AND with
+// OFFICE_NOTES_LINE_COUNT in functions/index.js.
+var NOTES_LINE_INDEXES = Array.from({ length: 9 }, (_, i) => i);
 
 // For boxes that flex-fill whatever space is left (height not known ahead of
 // time) — generous enough to cover any realistic fill area; the wrap's
