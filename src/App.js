@@ -1857,15 +1857,12 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             )}
           </div>
 
+          ${/* Success is silent (Ricky's call — the filled fields are their
+                own evidence); only a lookup that FAILED or found nothing to
+                fill says anything. */ ""}
           ${!exportMode &&
-          (regoLookup.error || regoLookup.filled.length > 0) &&
-          html`
-            <div class=${"rego-lookup-status no-print" + (regoLookup.error ? " is-error" : "")}>
-              ${regoLookup.error
-                ? regoLookup.error
-                : "Filled from EzyParts: " + regoLookup.filled.join(", ")}
-            </div>
-          `}
+          regoLookup.error &&
+          html`<div class="rego-lookup-status no-print is-error">${regoLookup.error}</div>`}
 
           <div class="oil-spec-bar">
             ${OIL_SPEC_FIELDS.map(
