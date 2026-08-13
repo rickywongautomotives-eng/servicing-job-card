@@ -234,14 +234,18 @@ const FIELD_RULES = [
   { field: "airFilter", kind: "filter", match: /^air filter$/i },
   { field: "cabinFilter", kind: "filter", match: /cabin/i },
   { field: "fuelFilter", kind: "filter", match: /^fuel filter$/i },
-  { field: "brakeFluid", kind: "oil", match: /brake fluid/i },
+  // minDot4: the workshop stocks DOT 4 as its minimum, so DOT 3 products are
+  // never suggested even where EzyParts lists them (Ricky: "dot 3 is a very
+  // old brake fluid"). Clutch hydraulics use brake fluid, so both rows carry
+  // the rule.
+  { field: "brakeFluid", kind: "oil", match: /brake fluid/i, minDot4: true },
   // Anchored, or "Throttle Body Coolant Hose" (a hose, in the Cooling
   // category) lands in the Coolant row on any car whose earlier categories
   // don't carry the fluid.
   { field: "coolant", kind: "oil", match: /^(?:engine\s+)?coolant\b|antifreeze/i },
   // The real heading is "Clutch Hydraulic Fluid" -- adjacency never matched
   // it and the row stayed blank on a card whose payload carried it.
-  { field: "clutchFluid", kind: "oil", match: /clutch\s*(?:hydraulic\s*)?fluid/i },
+  { field: "clutchFluid", kind: "oil", match: /clutch\s*(?:hydraulic\s*)?fluid/i, minDot4: true },
   { field: "sparkPlugs", kind: "plug", match: /spark plug/i },
   // The Belts category is mostly hardware -- "Drive Belt Tensioner
   // Assembly", "Drive Belt Idler Pulley", "Timing Chain Kit" -- and any of
@@ -288,14 +292,39 @@ function shortOilSpec(code, notes) {
   const gl = s.match(/API\s*GL-?\s*(\d)/i);
   if (gl) pieces.push("GL" + gl[1]);
 
+  // Skipped when the product name already carries the rating -- Penrite's
+  // brake fluid family rows are literally NAMED "DOT 4", and appending the
+  // rating again printed "DOT 4 DOT4" on the card.
   const dot = s.match(/DOT\s*([345](?:\.1)?)/i);
-  if (dot) pieces.push("DOT" + dot[1]);
+  if (dot && !/DOT\s*\d/i.test(String(code || ""))) pieces.push("DOT" + dot[1]);
 
   const cap = s.match(/([\d.]+)\s*(m?L)\s*Capacity/i);
   const capacity = cap ? cap[1] + cap[2] : "";
 
   const head = pieces.filter(Boolean).join(" ");
   return capacity ? head + " - " + capacity : head;
+}
+
+// DOT rating of a brake/clutch fluid product, read from wherever it appears
+// (product name, notes or description). null when nothing states one.
+function dotRating(p) {
+  const m = ((p.code || "") + " " + (p.notes || "") + " " + (p.description || "")).match(/DOT\s*(\d(?:\.\d)?)/i);
+  return m ? parseFloat(m[1]) : null;
+}
+
+// Applies the workshop's DOT-4-minimum rule to a brake/clutch fluid listing.
+// DOT 4 and DOT 5.1 are glycol fluids and fine; plain DOT 5 is silicone and
+// must never go into a glycol system, so it is excluded outright rather than
+// treated as "5 >= 4". Products that state no rating are kept only when
+// nothing rated 4+ exists. Returns [] for a DOT-3-only listing -- the row is
+// better blank than suggesting a fluid the workshop does not stock.
+function dot4Minimum(parts) {
+  const rated = parts.filter((p) => {
+    const r = dotRating(p);
+    return r !== null && r >= 4 && r !== 5;
+  });
+  if (rated.length) return rated;
+  return parts.filter((p) => dotRating(p) === null);
 }
 
 // Picks one part for a category, following the brand preference and falling
@@ -332,7 +361,9 @@ function pickParts(partsPayload) {
     // First category to claim a field wins; EzyParts sometimes lists the
     // same part under a second heading.
     if (chosen[rule.field]) return;
-    const pick = preferBrand(parts, rule.kind);
+    const candidates = rule.minDot4 ? dot4Minimum(parts) : parts;
+    if (!candidates.length) return;
+    const pick = preferBrand(candidates, rule.kind);
     if (pick) {
       chosen[rule.field] = Object.assign({}, pick, {
         kind: rule.kind,
@@ -613,5 +644,6 @@ module.exports = {
   engineCode,
   categoriesFromHtml,
   shortOilSpec,
+  dot4Minimum,
   FIELD_RULES,
 };
