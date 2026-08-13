@@ -365,10 +365,17 @@ function pickParts(partsPayload) {
     if (!candidates.length) return;
     const pick = preferBrand(candidates, rule.kind);
     if (pick) {
-      chosen[rule.field] = Object.assign({}, pick, {
-        kind: rule.kind,
-        display: rule.kind === "oil" ? shortOilSpec(pick.code, pick.notes || pick.description) : pick.code,
-      });
+      // Brake/clutch rows show the RATING, not the product name: Penrite's
+      // family row is literally named "BF", and "BF DOT4" on the card just
+      // begged the question of what BF meant. The rating is the spec here.
+      const rating = rule.minDot4 ? dotRating(pick) : null;
+      const cap = String(pick.notes || pick.description || "").match(/([\d.]+)\s*(m?L)\s*Capacity/i);
+      const display = rating
+        ? "DOT" + rating + (cap ? " - " + cap[1] + cap[2] : "")
+        : rule.kind === "oil"
+          ? shortOilSpec(pick.code, pick.notes || pick.description)
+          : pick.code;
+      chosen[rule.field] = Object.assign({}, pick, { kind: rule.kind, display });
     }
   });
 
