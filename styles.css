@@ -894,6 +894,10 @@ input.office-written[type="checkbox"] {
   padding: 0;
 }
 
+.rt-swatch-black {
+  background: #1c1e21;
+}
+
 .rt-swatch-red {
   background: #c0271d;
 }

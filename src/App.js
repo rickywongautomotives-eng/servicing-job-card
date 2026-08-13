@@ -199,7 +199,7 @@ function resizeImageFile(file) {
 // on mount and when it changes from something OTHER than this element's own
 // last reported edit (e.g. resuming a saved job, or Clear All) — ordinary
 // typing never touches innerHTML from the React side.
-function RichText({ value, onChange, exportMode, className, placeholder, multiline, disabled, limitToBox }) {
+function RichText({ value, onChange, exportMode, className, placeholder, multiline, disabled, limitToBox, officeInk }) {
   const elRef = React.useRef(null);
   const lastReportedRef = React.useRef(value);
   // Kept current on every render so the stable ref callback below can read
@@ -352,6 +352,29 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
       e.preventDefault();
       elRef.current.blur();
     }
+    // Office ink: what the OFFICE types lands red+bold, character by
+    // character, while everything already in the box keeps its colour. This
+    // replaced flipping a whole-field .office-written class, which turned a
+    // box full of black booking text red the moment the office touched it —
+    // the opposite of "red means the bit I added" (Ricky's words: "that way
+    // the technician knows which one is standard old text or new text ive
+    // just added").
+    //
+    // Works by setting the browser's pending typing style just before each
+    // printable character inserts. Only when the caret is collapsed — with a
+    // selection, foreColor would recolour EXISTING text, which is exactly
+    // what this must never do. styleWithCSS is switched on for the one call
+    // so it emits a span (and back off, since the toolbar's own foreColor
+    // has always produced <font> tags and PDFs render both identically).
+    if (officeInk && !disabled && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const sel = window.getSelection();
+      if (sel && sel.isCollapsed) {
+        document.execCommand("styleWithCSS", false, true);
+        document.execCommand("foreColor", false, "#c0271d");
+        document.execCommand("styleWithCSS", false, false);
+        if (!document.queryCommandState("bold")) document.execCommand("bold");
+      }
+    }
   }
 
   // --- Scrolling a ruled notes box (limitToBox) ---
@@ -436,6 +459,13 @@ function RichText({ value, onChange, exportMode, className, placeholder, multili
           <button type="button" class="rt-btn" onMouseDown=${(e) => e.preventDefault()} onClick=${() => applyFormat("underline")}>
             <u>U</u>
           </button>
+          <button
+            type="button"
+            class="rt-swatch rt-swatch-black"
+            onMouseDown=${(e) => e.preventDefault()}
+            onClick=${() => applyFormat("foreColor", "#1c1e21")}
+            aria-label="Black"
+          ></button>
           <button
             type="button"
             class="rt-swatch rt-swatch-red"
@@ -853,8 +883,8 @@ function SectionAdder({ sections, onToggle, hiddenWithContent, exportMode }) {
 // fine — so this is belt-and-braces rather than a fix for a live bug. It
 // stays because the rest of the card already works this way and because
 // relying on that behaviour is what the surrounding comments warn against.
-function CellInput({ value, onChange, disabled, exportMode, placeholder, align }) {
-  const cls = align === "right" ? " cell-right" : "";
+function CellInput({ value, onChange, disabled, exportMode, placeholder, align, by }) {
+  const cls = (align === "right" ? " cell-right" : "") + (by === "office" ? " office-written" : "");
   if (exportMode) {
     return html`<div class=${"cell-text export-text" + cls}>${value}</div>`;
   }
@@ -947,13 +977,17 @@ function buildQuoteMessage({ header, diagnostics, quote }) {
   return lines.join("\n");
 }
 
-function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle, disabled, exportMode }) {
+function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle, disabled, exportMode, role }) {
   const [copied, setCopied] = React.useState(false);
   const totals = quoteTotals(quote.items);
 
+  // Per-cell attribution, same convention as the fault codes: office edits
+  // render red/bold so the quote shows whose figures they are.
   function setRow(index, field, value) {
     onChange({
-      items: quote.items.map((r, i) => (i === index ? Object.assign({}, r, { [field]: value }) : r)),
+      items: quote.items.map((r, i) =>
+        i === index ? Object.assign({}, r, { [field]: value, [field + "By"]: role || "" }) : r
+      ),
     });
   }
 
@@ -988,15 +1022,15 @@ function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle
           (row, i) => html`
             <tr key=${i}>
               <td>
-                <${CellInput} value=${row.desc} disabled=${disabled} exportMode=${exportMode}
+                <${CellInput} value=${row.desc} by=${row.descBy} disabled=${disabled} exportMode=${exportMode}
                   onChange=${(v) => setRow(i, "desc", v)} />
               </td>
               <td class="quote-num">
-                <${CellInput} value=${row.sell} align="right" disabled=${disabled} exportMode=${exportMode}
+                <${CellInput} value=${row.sell} by=${row.sellBy} align="right" disabled=${disabled} exportMode=${exportMode}
                   onChange=${(v) => setRow(i, "sell", v)} />
               </td>
               <td class="quote-num quote-margin">
-                <${CellInput} value=${row.cost} align="right" disabled=${disabled} exportMode=${exportMode}
+                <${CellInput} value=${row.cost} by=${row.costBy} align="right" disabled=${disabled} exportMode=${exportMode}
                   onChange=${(v) => setRow(i, "cost", v)} />
               </td>
             </tr>
@@ -1027,9 +1061,15 @@ function QuoteSection({ quote, header, diagnostics, sections, onChange, onToggle
   `;
 }
 
-function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, exportMode }) {
+function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, exportMode, officeInk, role }) {
+  // Fault-code cells are plain inputs, so office attribution is per-cell
+  // rather than per-character: each edited field gets a sibling "<field>By"
+  // stamp, and office-stamped cells render red/bold like every other
+  // attributed input on the card.
   function setRow(listKey, index, field, value) {
-    const rows = data[listKey].map((r, i) => (i === index ? Object.assign({}, r, { [field]: value }) : r));
+    const rows = data[listKey].map((r, i) =>
+      i === index ? Object.assign({}, r, { [field]: value, [field + "By"]: role || "" }) : r
+    );
     onChange(listKey, rows);
   }
 
@@ -1060,6 +1100,7 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
               </div>
               <${RichText}
                 className="notes-box ruled-fill"
+                officeInk=${officeInk}
                 value=${data[box.key]}
                 onChange=${(v) => onChange(box.key, v)}
                 multiline=${true}
@@ -1082,15 +1123,15 @@ function DiagnosticsSection({ data, sections, onChange, onToggle, disabled, expo
             (row, i) => html`
               <tr key=${i}>
                 <td>
-                  <${CellInput} value=${row.code} placeholder="P0125" disabled=${disabled} exportMode=${exportMode}
+                  <${CellInput} value=${row.code} by=${row.codeBy} placeholder="P0125" disabled=${disabled} exportMode=${exportMode}
                     onChange=${(v) => setRow("faultCodes", i, "code", v)} />
                 </td>
                 <td>
-                  <${CellInput} value=${row.description} disabled=${disabled} exportMode=${exportMode}
+                  <${CellInput} value=${row.description} by=${row.descriptionBy} disabled=${disabled} exportMode=${exportMode}
                     onChange=${(v) => setRow("faultCodes", i, "description", v)} />
                 </td>
                 <td>
-                  <${CellInput} value=${row.status} placeholder="active" disabled=${disabled} exportMode=${exportMode}
+                  <${CellInput} value=${row.status} by=${row.statusBy} placeholder="active" disabled=${disabled} exportMode=${exportMode}
                     onChange=${(v) => setRow("faultCodes", i, "status", v)} />
                 </td>
               </tr>
@@ -1252,6 +1293,9 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
     1 + (page2Used ? 1 : 0) + (diagPageUsed ? 1 : 0) + (quotePageUsed ? 1 : 0);
 
   const updateHeader = (key, value) => {
+    // Plates are caps by definition; typing "vams01" and printing "vams01"
+    // just looks like a mistake on the card.
+    if (key === "registration") value = value.toUpperCase();
     setHeader((prev) => ({ ...prev, [key]: value }));
     setHeaderBy((prev) => ({ ...prev, [key]: role }));
   };
@@ -1401,6 +1445,10 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       const filled = [];
       const v = res.vehicle || {};
 
+      // Lookup fills are stamped with NO author, so they print plain black:
+      // red is reserved for what a person at the office actually typed, and
+      // catalogue data pretending to be the office's handwriting muddied
+      // that. (Ricky: "i want these auto populated information to be black.")
       const headerPatch = {};
       const maybe = (key, value) => {
         if (!value) return;
@@ -1422,7 +1470,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       if (Object.keys(headerPatch).length) {
         setHeader((prev) => Object.assign({}, prev, headerPatch));
         setHeaderBy((prev) =>
-          Object.assign({}, prev, Object.fromEntries(Object.keys(headerPatch).map((k) => [k, role])))
+          Object.assign({}, prev, Object.fromEntries(Object.keys(headerPatch).map((k) => [k, ""])))
         );
       }
 
@@ -1450,7 +1498,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
       if (Object.keys(oilPatch).length) {
         setOilSpec((prev) => Object.assign({}, prev, oilPatch));
         setOilSpecBy((prev) =>
-          Object.assign({}, prev, Object.fromEntries(Object.keys(oilPatch).map((k) => [k, role])))
+          Object.assign({}, prev, Object.fromEntries(Object.keys(oilPatch).map((k) => [k, ""])))
         );
       }
 
@@ -1465,7 +1513,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
         const part = partFields[key];
         fluidPatch[key] = Object.assign({}, fluids[key], {
           value: describe(part),
-          valueBy: role,
+          valueBy: "",
         });
         filled.push(part.category || key);
       });
@@ -2019,7 +2067,8 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
               ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
             </div>
             <${RichText}
-              className=${"notes-box ruled-fill" + (officeNotesBy === "office" ? " office-written" : "")}
+              className="notes-box ruled-fill"
+              officeInk=${isOffice}
               limitToBox=${true}
               value=${officeNotes}
               onChange=${updateOfficeNotes}
@@ -2134,7 +2183,8 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
               </div>
               <${RichText}
-                className=${"notes-box book-notes ruled-fill" + (notes2LeftBy === "office" ? " office-written" : "")}
+                className="notes-box book-notes ruled-fill"
+                officeInk=${isOffice}
                 limitToBox=${true}
                 value=${notes2Left}
                 onChange=${updateNotes2Left}
@@ -2148,7 +2198,8 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                 ${RULE_DRAW_INDEXES.map((i) => html`<div class="notes-line" key=${i}></div>`)}
               </div>
               <${RichText}
-                className=${"notes-box book-notes ruled-fill" + (notes2RightBy === "office" ? " office-written" : "")}
+                className="notes-box book-notes ruled-fill"
+                officeInk=${isOffice}
                 limitToBox=${true}
                 value=${notes2Right}
                 onChange=${updateNotes2Right}
@@ -2174,6 +2225,8 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             onToggle=${toggleSection}
             disabled=${locked}
             exportMode=${exportMode}
+            officeInk=${isOffice}
+            role=${role}
           />
         </section>
         `}
@@ -2191,6 +2244,7 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
             onToggle=${toggleSection}
             disabled=${locked}
             exportMode=${exportMode}
+            role=${role}
           />
         </section>
         `}

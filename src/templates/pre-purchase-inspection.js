@@ -1025,7 +1025,8 @@ function PrePurchaseInspectionCard({ onChangeTemplate, jobId: initialJobId, init
   const photoInputRef = React.useRef(null);
   const pendingPhotoViewRef = React.useRef(null);
 
-  const updateHeader = (key, value) => setHeader((prev) => ({ ...prev, [key]: value }));
+  const updateHeader = (key, value) =>
+    setHeader((prev) => ({ ...prev, [key]: key === "registration" ? value.toUpperCase() : value }));
 
   const updateDiagram = (viewKey, patch) =>
     setDiagrams((prev) => ({ ...prev, [viewKey]: { ...prev[viewKey], ...patch } }));
