@@ -2008,7 +2008,12 @@ function GeneralServiceCard({ onChangeTemplate, jobId: initialJobId, initialStat
                           key=${f.key}
                           field=${f}
                           value=${header[f.key]}
-                          by=${headerBy[f.key]}
+                          by=${/* Rego is always black — it's typed to START a
+                                card, not to edit one, so office-red ink never
+                                applies (Ricky's call). Ignoring the stored
+                                attribution here also fixes cards saved before
+                                this rule existed. */
+                          f.key === "registration" ? "" : headerBy[f.key]}
                           onChange=${updateHeader}
                           exportMode=${exportMode}
                           action=${action}
