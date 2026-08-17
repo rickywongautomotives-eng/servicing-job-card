@@ -32,6 +32,13 @@ check(auto.match.test("Auto Trans Fluid"), true, "autoOil matches 'Auto Trans Fl
 check(auto.match.test("Automatic Transmission Fluid"), true, "autoOil matches long form");
 check(auto.match.test("Automatic Trans Filter"), false, "filter heading must NOT match autoOil");
 check(auto.match.test("Automatic Trans Oil Cooler"), false, "oil cooler must NOT match autoOil");
+// DSG/DCT cars (DMC472): fluid is filed under "DCT Transmission Fluid", must
+// land in the Auto Oil row -- but the DCT hardware/seals beside it must not.
+check(auto.match.test("DCT Transmission Fluid"), true, "autoOil matches 'DCT Transmission Fluid' (DSG car)");
+check(auto.match.test("DSG Transmission Fluid"), true, "autoOil matches 'DSG Transmission Fluid'");
+check(auto.match.test("Dual Clutch Transmission Fluid"), true, "autoOil matches 'Dual Clutch Transmission Fluid'");
+check(auto.match.test("Man/DCT/AMT Trans Front Seal"), false, "DCT seal must NOT match autoOil");
+check(auto.match.test("Man/DCT/AMT Trans Drive Shaft Seal"), false, "DCT shaft seal must NOT match autoOil");
 
 // --- diff look-aheads, both word orders ---
 const fd = m.FIELD_RULES.find((r) => r.field === "fDiffOil");

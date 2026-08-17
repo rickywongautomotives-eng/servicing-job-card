@@ -302,7 +302,19 @@ const FIELD_RULES = [
   // exclusions matter as much as the match: "Automatic Trans Filter" sits
   // right beside it and would otherwise claim the row first, and the Cooling
   // category carries an "Automatic Trans Oil Cooler".
-  { field: "autoOil", kind: "oil", match: /^(?!.*(?:filter|cooler|seal|kit|tool))auto(?:matic)?\.?\s*trans/i },
+  //
+  // DSG/DCT cars (e.g. DMC472) don't have an "Automatic Trans Fluid" heading
+  // at all -- EzyParts files their gearbox fluid under "DCT Transmission
+  // Fluid" instead, so it was being missed. The second branch catches DCT /
+  // DSG / dual-clutch fluid and drops it into this same Auto Oil row (it IS
+  // the automatic gearbox's fluid). It insists on "fluid"/"oil" so the DCT
+  // hardware and seals sitting in the same category -- "Man/DCT/AMT Trans
+  // Front Seal" and friends -- are left alone.
+  {
+    field: "autoOil",
+    kind: "oil",
+    match: /^(?!.*(?:filter|cooler|seal|kit|tool))(?:auto(?:matic)?\.?\s*trans|(?:dct|dsg|dual\s*clutch)\s*trans\w*\s*(?:fluid|oil))/i,
+  },
   { field: "manualOil", kind: "oil", match: /manual\s*trans|gearbox oil/i },
   // Verified against a real Pajero: requiring only "diff" plus a side put a
   // SuperPro suspension bush in the R/Diff Oil row -- the Shafts category is
